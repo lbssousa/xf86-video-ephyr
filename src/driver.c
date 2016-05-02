@@ -503,39 +503,23 @@ static Bool NestedScreenInit(SCREEN_INIT_ARGS_DECL)
     xf86DrvMsg(pScrn->scrnIndex, X_INFO, "NestedScreenInit\n");
     NestedPrintPscreen(pScrn);
 
-    /* TODO: replace with corresponding Xephyr function
-    pNested->clientData = NestedClientCreateScreen(pScrn->scrnIndex,
-                                                   pScrn->virtualX,
-                                                   pScrn->virtualY,
-                                                   scrpriv->win_x,
-                                                   scrpriv->win_y,
-                                                   pScrn->depth,
-                                                   pScrn->bitsPerPixel,
-                                                   &redMask, &greenMask, &blueMask);
-    
-    if (!pNested->clientData) {
-        xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "Failed to create client screen\n");
-        return FALSE;
-    } */
-    
-    miClearVisualTypes();
-    if (!miSetVisualTypesAndMasks(pScrn->depth,
-                                  miGetDefaultVisualMask(pScrn->depth),
-                                  pScrn->rgbBits, pScrn->defaultVisual,
-                                  redMask, greenMask, blueMask))
-        return FALSE;
-    
-    if (!miSetPixmapDepths())
-        return FALSE;
-
-    /* XXX: Shouldn't we call ephyrMapFramebuffer()
-     * instead of hostx_screen_init() here? */
     fb_data = hostx_screen_init(pScrn,
                                 pScrn->frameX0, pScrn->frameY0,
                                 pScrn->VirtualX, pScrn->VirtualY,
                                 ephyrBufferHeight(pScrn),
                                 NULL, /* bytes per line/row (not used) */
                                 &pScrn->bitsPerPixel);
+    miClearVisualTypes();
+
+    if (!miSetVisualTypesAndMasks(pScrn->depth,
+                                  miGetDefaultVisualMask(pScrn->depth),
+                                  pScrn->rgbBits, pScrn->defaultVisual,
+                                  redMask, greenMask, blueMask)) {
+        return FALSE;
+    }
+    
+    if (!miSetPixmapDepths())
+        return FALSE;
 
     if (!fbScreenInit(pScreen,
                       fb_data,
