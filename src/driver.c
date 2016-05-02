@@ -518,8 +518,7 @@ NestedAddMode(ScrnInfoPtr pScrn, int width, int height) {
 
 static void
 NestedBlockHandler(pointer data, OSTimePtr wt, pointer LastSelectMask) {
-    NestedClientPrivatePtr pNestedClient = data;
-    NestedClientCheckEvents(pNestedClient);
+    ephyrPoll();
 }
 
 static void
