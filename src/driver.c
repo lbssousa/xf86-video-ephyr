@@ -498,6 +498,7 @@ static Bool NestedScreenInit(SCREEN_INIT_ARGS_DECL)
     ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
     EphyrScrPrivPtr scrpriv = pScrn->driverPrivate;
     Pixel redMask, greenMask, blueMask;
+    char *fb_data;
 
     xf86DrvMsg(pScrn->scrnIndex, X_INFO, "NestedScreenInit\n");
     NestedPrintPscreen(pScrn);
@@ -527,11 +528,21 @@ static Bool NestedScreenInit(SCREEN_INIT_ARGS_DECL)
     if (!miSetPixmapDepths())
         return FALSE;
 
-    /* TODO: replace with corresponding Xephyr function
-    if (!fbScreenInit(pScreen, NestedClientGetFrameBuffer(PCLIENTDATA(pScrn)),
+    /* XXX: Shouldn't we call ephyrMapFramebuffer()
+     * instead of hostx_screen_init() here? */
+    fb_data = hostx_screen_init(pScrn,
+                                pScrn->frameX0, pScrn->frameY0,
+                                pScrn->VirtualX, pScrn->VirtualY,
+                                ephyrBufferHeight(pScrn),
+                                NULL, /* bytes per line/row (not used) */
+                                &pScrn->bitsPerPixel);
+
+    if (!fbScreenInit(pScreen,
+                      fb_data,
                       pScrn->virtualX, pScrn->virtualY, pScrn->xDpi,
-                      pScrn->yDpi, pScrn->displayWidth, pScrn->bitsPerPixel))
-        return FALSE; */
+                      pScrn->yDpi, pScrn->displayWidth, pScrn->bitsPerPixel)) {
+        return FALSE;
+    }
 
     fbPictureInit(pScreen, 0, 0);
 
@@ -581,14 +592,7 @@ NestedCreateScreenResources(ScreenPtr pScreen) {
 
 static void
 NestedShadowUpdate(ScreenPtr pScreen, shadowBufPtr pBuf) {
-    ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
-    EphyrScrPrivPtr scrpriv = pScrn->driverPrivate;
-
-    RegionPtr pRegion = DamageRegion(pBuf->pDamage);
-    /* TODO: replace with corresponding Xephyr function
-    NestedClientUpdateScreen(scrpriv,
-                             pRegion->extents.x1, pRegion->extents.y1,
-                             pRegion->extents.x2, pRegion->extents.y2); */
+    ephyrShadowUpdate(pScreen, pBuf);
 }
 
 static Bool
