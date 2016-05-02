@@ -195,14 +195,16 @@ ephyrWindowLinear(ScreenPtr pScreen,
  * buffer so that fakexa has space to put offscreen pixmaps.
  */
 int
-ephyrBufferHeight(KdScreenInfo * screen)
+ephyrBufferHeight(ScrnInfoPtr pScrn)
 {
     int buffer_height;
 
+    /* TODO: replace kdrive's initAccel() with some xfree86 eqiuvalent (e.g. EXA)
     if (ephyrFuncs.initAccel == NULL)
         buffer_height = screen->height;
     else
-        buffer_height = 3 * screen->height;
+        buffer_height = 3 * screen->height; */
+    buffer_height = screen->height;
     return buffer_height;
 }
 
