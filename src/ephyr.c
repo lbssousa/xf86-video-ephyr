@@ -90,89 +90,89 @@ ephyrCardInit(KdCardInfo * card)
 }
 
 Bool
-ephyrScreenInitialize(KdScreenInfo *screen)
+ephyrScreenInitialize(ScrnInfoPtr pScrn)
 {
-    EphyrScrPriv *scrpriv = screen->driver;
+    EphyrScrPrivPtr scrpriv = pScrn->driverPrivate;
     int x = 0, y = 0;
     int width = 640, height = 480;
     CARD32 redMask, greenMask, blueMask;
 
-    if (hostx_want_screen_geometry(screen, &width, &height, &x, &y)
-        || !screen->width || !screen->height) {
-        screen->width = width;
-        screen->height = height;
-        screen->x = x;
-        screen->y = y;
+    if (hostx_want_screen_geometry(pScrn, &width, &height, &x, &y)
+        || !pScrn->width || !pScrn->height) {
+        pScrn->width = width;
+        pScrn->height = height;
+        pScrn->x = x;
+        pScrn->y = y;
     }
 
     if (EphyrWantGrayScale)
-        screen->fb.depth = 8;
+        pScrn->fb.depth = 8;
 
-    if (screen->fb.depth && screen->fb.depth != hostx_get_depth()) {
-        if (screen->fb.depth < hostx_get_depth()
-            && (screen->fb.depth == 24 || screen->fb.depth == 16
-                || screen->fb.depth == 8)) {
-            scrpriv->server_depth = screen->fb.depth;
+    if (pScrn->fb.depth && pScrn->fb.depth != hostx_get_depth()) {
+        if (pScrn->fb.depth < hostx_get_depth()
+            && (pScrn->fb.depth == 24 || pScrn->fb.depth == 16
+                || pScrn->fb.depth == 8)) {
+            scrpriv->server_depth = pScrn->fb.depth;
         }
         else
             ErrorF
                 ("\nXephyr: requested screen depth not supported, setting to match hosts.\n");
     }
 
-    screen->fb.depth = hostx_get_server_depth(screen);
-    screen->rate = 72;
+    pScrn->fb.depth = hostx_get_server_depth(pScrn);
+    pScrn->rate = 72;
 
-    if (screen->fb.depth <= 8) {
+    if (pScrn->fb.depth <= 8) {
         if (EphyrWantGrayScale)
-            screen->fb.visuals = ((1 << StaticGray) | (1 << GrayScale));
+            pScrn->fb.visuals = ((1 << StaticGray) | (1 << GrayScale));
         else
-            screen->fb.visuals = ((1 << StaticGray) |
+            pScrn->fb.visuals = ((1 << StaticGray) |
                                   (1 << GrayScale) |
                                   (1 << StaticColor) |
                                   (1 << PseudoColor) |
                                   (1 << TrueColor) | (1 << DirectColor));
 
-        screen->fb.redMask = 0x00;
-        screen->fb.greenMask = 0x00;
-        screen->fb.blueMask = 0x00;
-        screen->fb.depth = 8;
-        screen->fb.bitsPerPixel = 8;
+        pScrn->fb.redMask = 0x00;
+        pScrn->fb.greenMask = 0x00;
+        pScrn->fb.blueMask = 0x00;
+        pScrn->fb.depth = 8;
+        pScrn->fb.bitsPerPixel = 8;
     }
     else {
-        screen->fb.visuals = (1 << TrueColor);
+        pScrn->fb.visuals = (1 << TrueColor);
 
-        if (screen->fb.depth <= 15) {
-            screen->fb.depth = 15;
-            screen->fb.bitsPerPixel = 16;
+        if (pScrn->fb.depth <= 15) {
+            pScrn->fb.depth = 15;
+            pScrn->fb.bitsPerPixel = 16;
         }
-        else if (screen->fb.depth <= 16) {
-            screen->fb.depth = 16;
-            screen->fb.bitsPerPixel = 16;
+        else if (pScrn->fb.depth <= 16) {
+            pScrn->fb.depth = 16;
+            pScrn->fb.bitsPerPixel = 16;
         }
-        else if (screen->fb.depth <= 24) {
-            screen->fb.depth = 24;
-            screen->fb.bitsPerPixel = 32;
+        else if (pScrn->fb.depth <= 24) {
+            pScrn->fb.depth = 24;
+            pScrn->fb.bitsPerPixel = 32;
         }
-        else if (screen->fb.depth <= 30) {
-            screen->fb.depth = 30;
-            screen->fb.bitsPerPixel = 32;
+        else if (pScrn->fb.depth <= 30) {
+            pScrn->fb.depth = 30;
+            pScrn->fb.bitsPerPixel = 32;
         }
         else {
-            ErrorF("\nXephyr: Unsupported screen depth %d\n", screen->fb.depth);
+            ErrorF("\nXephyr: Unsupported screen depth %d\n", pScrn->fb.depth);
             return FALSE;
         }
 
-        hostx_get_visual_masks(screen, &redMask, &greenMask, &blueMask);
+        hostx_get_visual_masks(pScrn, &redMask, &greenMask, &blueMask);
 
-        screen->fb.redMask = (Pixel) redMask;
-        screen->fb.greenMask = (Pixel) greenMask;
-        screen->fb.blueMask = (Pixel) blueMask;
+        pScrn->fb.redMask = (Pixel) redMask;
+        pScrn->fb.greenMask = (Pixel) greenMask;
+        pScrn->fb.blueMask = (Pixel) blueMask;
 
     }
 
-    scrpriv->randr = screen->randr;
+    scrpriv->randr = pScrn->randr;
 
-    return ephyrMapFramebuffer(screen);
+    return ephyrMapFramebuffer(pScrn);
 }
 
 void *
@@ -180,7 +180,6 @@ ephyrWindowLinear(ScreenPtr pScreen,
                   CARD32 row,
                   CARD32 offset, int mode, CARD32 *size, void *closure)
 {
-    KdScreenPriv(pScreen);
     EphyrPriv *priv = pScreenPriv->card->driver;
 
     if (!pScreenPriv->enabled)
@@ -201,44 +200,44 @@ ephyrBufferHeight(ScrnInfoPtr pScrn)
 
     /* TODO: replace kdrive's initAccel() with some xfree86 eqiuvalent (e.g. EXA)
     if (ephyrFuncs.initAccel == NULL)
-        buffer_height = screen->height;
+        buffer_height = pScrn->height;
     else
-        buffer_height = 3 * screen->height; */
-    buffer_height = screen->height;
+        buffer_height = 3 * pScrn->height; */
+    buffer_height = pScrn->height;
     return buffer_height;
 }
 
 Bool
-ephyrMapFramebuffer(KdScreenInfo * screen)
+ephyrMapFramebuffer(ScrnInfoPtr pScrn)
 {
-    EphyrScrPriv *scrpriv = screen->driver;
-    EphyrPriv *priv = screen->card->driver;
+    EphyrScrPrivPtr scrpriv = pScrn->driverPrivate;
+    EphyrPriv *priv = pScrn->card->driver;
     KdPointerMatrix m;
     int buffer_height;
 
-    EPHYR_LOG("screen->width: %d, screen->height: %d index=%d",
-              screen->width, screen->height, screen->mynum);
+    EPHYR_LOG("pScrn->width: %d, pScrn->height: %d index=%d",
+              pScrn->width, pScrn->height, pScrn->mynum);
 
     /*
      * Use the rotation last applied to ourselves (in the Xephyr case the fb
      * coordinate system moves independently of the pointer coordiante system).
      */
-    KdComputePointerMatrix(&m, ephyrRandr, screen->width, screen->height);
+    KdComputePointerMatrix(&m, ephyrRandr, pScrn->width, pScrn->height);
     KdSetPointerMatrix(&m);
 
-    buffer_height = ephyrBufferHeight(screen);
+    buffer_height = ephyrBufferHeight(pScrn);
 
     priv->base =
-        hostx_screen_init(screen, screen->x, screen->y,
-                          screen->width, screen->height, buffer_height,
-                          &priv->bytes_per_line, &screen->fb.bitsPerPixel);
+        hostx_screen_init(pScrn, pScrn->x, pScrn->y,
+                          pScrn->width, pScrn->height, buffer_height,
+                          &priv->bytes_per_line, &pScrn->fb.bitsPerPixel);
 
     if ((scrpriv->randr & RR_Rotate_0) && !(scrpriv->randr & RR_Reflect_All)) {
         scrpriv->shadow = FALSE;
 
-        screen->fb.byteStride = priv->bytes_per_line;
-        screen->fb.pixelStride = screen->width;
-        screen->fb.frameBuffer = (CARD8 *) (priv->base);
+        pScrn->fb.byteStride = priv->bytes_per_line;
+        pScrn->fb.pixelStride = pScrn->width;
+        pScrn->fb.frameBuffer = (CARD8 *) (priv->base);
     }
     else {
         /* Rotated/Reflected so we need to use shadow fb */
@@ -246,7 +245,7 @@ ephyrMapFramebuffer(KdScreenInfo * screen)
 
         EPHYR_LOG("allocing shadow");
 
-        KdShadowFbAlloc(screen,
+        KdShadowFbAlloc(pScrn,
                         scrpriv->randr & (RR_Rotate_90 | RR_Rotate_270));
     }
 
@@ -256,31 +255,30 @@ ephyrMapFramebuffer(KdScreenInfo * screen)
 void
 ephyrSetScreenSizes(ScreenPtr pScreen)
 {
-    KdScreenPriv(pScreen);
-    KdScreenInfo *screen = pScreenPriv->screen;
-    EphyrScrPriv *scrpriv = screen->driver;
+    ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
+    EphyrScrPrivPtr scrpriv = pScrn->driverPrivate;
 
     if (scrpriv->randr & (RR_Rotate_0 | RR_Rotate_180)) {
-        pScreen->width = screen->width;
-        pScreen->height = screen->height;
-        pScreen->mmWidth = screen->width_mm;
-        pScreen->mmHeight = screen->height_mm;
+        pScreen->width = pScrn->width;
+        pScreen->height = pScrn->height;
+        pScreen->mmWidth = pScrn->width_mm;
+        pScreen->mmHeight = pScrn->height_mm;
     }
     else {
-        pScreen->width = screen->height;
-        pScreen->height = screen->width;
-        pScreen->mmWidth = screen->height_mm;
-        pScreen->mmHeight = screen->width_mm;
+        pScreen->width = pScrn->height;
+        pScreen->height = pScrn->width;
+        pScreen->mmWidth = pScrn->height_mm;
+        pScreen->mmHeight = pScrn->width_mm;
     }
 }
 
 Bool
-ephyrUnmapFramebuffer(KdScreenInfo * screen)
+ephyrUnmapFramebuffer(ScrnInfoPtr pScrn)
 {
-    EphyrScrPriv *scrpriv = screen->driver;
+    EphyrScrPrivPtr scrpriv = pScrn->driverPrivate;
 
     if (scrpriv->shadow)
-        KdShadowFbFree(screen);
+        KdShadowFbFree(pScrn);
 
     /* Note, priv->base will get freed when XImage recreated */
 
@@ -290,8 +288,7 @@ ephyrUnmapFramebuffer(KdScreenInfo * screen)
 void
 ephyrShadowUpdate(ScreenPtr pScreen, shadowBufPtr pBuf)
 {
-    KdScreenPriv(pScreen);
-    KdScreenInfo *screen = pScreenPriv->screen;
+    ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
 
     EPHYR_LOG("slow paint");
 
@@ -300,15 +297,14 @@ ephyrShadowUpdate(ScreenPtr pScreen, shadowBufPtr pBuf)
      * pBuf->pDamage  regions
      */
     shadowUpdateRotatePacked(pScreen, pBuf);
-    hostx_paint_rect(screen, 0, 0, 0, 0, screen->width, screen->height);
+    hostx_paint_rect(pScrn, 0, 0, 0, 0, pScrn->width, pScrn->height);
 }
 
 static void
 ephyrInternalDamageRedisplay(ScreenPtr pScreen)
 {
-    KdScreenPriv(pScreen);
-    KdScreenInfo *screen = pScreenPriv->screen;
-    EphyrScrPriv *scrpriv = screen->driver;
+    ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
+    EphyrScrPrivPtr scrpriv = pScrn->driverPrivate;
     RegionPtr pRegion;
 
     if (!scrpriv || !scrpriv->pDamage)
@@ -327,7 +323,7 @@ ephyrInternalDamageRedisplay(ScreenPtr pScreen)
             pbox = RegionRects(pRegion);
 
             while (nbox--) {
-                hostx_paint_rect(screen,
+                hostx_paint_rect(pScrn,
                                  pbox->x1, pbox->y1,
                                  pbox->x1, pbox->y1,
                                  pbox->x2 - pbox->x1, pbox->y2 - pbox->y1);
@@ -355,9 +351,8 @@ ephyrInternalDamageWakeupHandler(void *data, int i, void *LastSelectMask)
 Bool
 ephyrSetInternalDamage(ScreenPtr pScreen)
 {
-    KdScreenPriv(pScreen);
-    KdScreenInfo *screen = pScreenPriv->screen;
-    EphyrScrPriv *scrpriv = screen->driver;
+    ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
+    EphyrScrPrivPtr scrpriv = pScrn->driverPrivate;
     PixmapPtr pPixmap = NULL;
 
     scrpriv->pDamage = DamageCreate((DamageReportFunc) 0,
@@ -379,9 +374,8 @@ ephyrSetInternalDamage(ScreenPtr pScreen)
 void
 ephyrUnsetInternalDamage(ScreenPtr pScreen)
 {
-    KdScreenPriv(pScreen);
-    KdScreenInfo *screen = pScreenPriv->screen;
-    EphyrScrPriv *scrpriv = screen->driver;
+    ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
+    EphyrScrPrivPtr scrpriv = pScrn->driverPrivate;
 
     DamageDestroy(scrpriv->pDamage);
 
@@ -394,9 +388,8 @@ ephyrUnsetInternalDamage(ScreenPtr pScreen)
 Bool
 ephyrRandRGetInfo(ScreenPtr pScreen, Rotation * rotations)
 {
-    KdScreenPriv(pScreen);
-    KdScreenInfo *screen = pScreenPriv->screen;
-    EphyrScrPriv *scrpriv = screen->driver;
+    ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
+    EphyrScrPrivPtr scrpriv = pScrn->driverPrivate;
     RRScreenSizePtr pSize;
     Rotation randr;
     int n = 0;
@@ -426,24 +419,24 @@ ephyrRandRGetInfo(ScreenPtr pScreen, Rotation * rotations)
 
     *rotations = RR_Rotate_All | RR_Reflect_All;
 
-    if (!hostx_want_preexisting_window(screen)
+    if (!hostx_want_preexisting_window(pScrn)
         && !hostx_want_fullscreen()) {  /* only if no -parent switch */
         while (sizes[n].width != 0 && sizes[n].height != 0) {
             RRRegisterSize(pScreen,
                            sizes[n].width,
                            sizes[n].height,
-                           (sizes[n].width * screen->width_mm) / screen->width,
-                           (sizes[n].height * screen->height_mm) /
-                           screen->height);
+                           (sizes[n].width * pScrn->width_mm) / pScrn->width,
+                           (sizes[n].height * pScrn->height_mm) /
+                           pScrn->height);
             n++;
         }
     }
 
     pSize = RRRegisterSize(pScreen,
-                           screen->width,
-                           screen->height, screen->width_mm, screen->height_mm);
+                           pScrn->width,
+                           pScrn->height, pScrn->width_mm, pScrn->height_mm);
 
-    randr = KdSubRotation(scrpriv->randr, screen->randr);
+    randr = KdSubRotation(scrpriv->randr, pScrn->randr);
 
     RRSetCurrentConfig(pScreen, randr, 0, pSize);
 
@@ -454,16 +447,15 @@ Bool
 ephyrRandRSetConfig(ScreenPtr pScreen,
                     Rotation randr, int rate, RRScreenSizePtr pSize)
 {
-    KdScreenPriv(pScreen);
-    KdScreenInfo *screen = pScreenPriv->screen;
-    EphyrScrPriv *scrpriv = screen->driver;
+    ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
+    EphyrScrPrivPtr scrpriv = pScrn->driverPrivate;
     Bool wasEnabled = pScreenPriv->enabled;
     EphyrScrPriv oldscr;
     int oldwidth, oldheight, oldmmwidth, oldmmheight;
     Bool oldshadow;
     int newwidth, newheight;
 
-    if (screen->randr & (RR_Rotate_0 | RR_Rotate_180)) {
+    if (pScrn->randr & (RR_Rotate_0 | RR_Rotate_180)) {
         newwidth = pSize->width;
         newheight = pSize->height;
     }
@@ -477,8 +469,8 @@ ephyrRandRSetConfig(ScreenPtr pScreen,
 
     oldscr = *scrpriv;
 
-    oldwidth = screen->width;
-    oldheight = screen->height;
+    oldwidth = pScrn->width;
+    oldheight = pScrn->height;
     oldmmwidth = pScreen->mmWidth;
     oldmmheight = pScreen->mmHeight;
     oldshadow = scrpriv->shadow;
@@ -494,26 +486,26 @@ ephyrRandRSetConfig(ScreenPtr pScreen,
      * state (presumably the HW is taking care of the rotation of the fb), but the
      * pointer still needs to be transformed.
      */
-    ephyrRandr = KdAddRotation(screen->randr, randr);
+    ephyrRandr = KdAddRotation(pScrn->randr, randr);
     scrpriv->randr = ephyrRandr;
 
-    ephyrUnmapFramebuffer(screen);
+    ephyrUnmapFramebuffer(pScrn);
 
-    screen->width = newwidth;
-    screen->height = newheight;
+    pScrn->width = newwidth;
+    pScrn->height = newheight;
 
-    if (!ephyrMapFramebuffer(screen))
+    if (!ephyrMapFramebuffer(pScrn))
         goto bail4;
 
     /* FIXME below should go in own call */
 
     if (oldshadow)
-        KdShadowUnset(screen->pScreen);
+        KdShadowUnset(pScrn->pScreen);
     else
-        ephyrUnsetInternalDamage(screen->pScreen);
+        ephyrUnsetInternalDamage(pScrn->pScreen);
 
     if (scrpriv->shadow) {
-        if (!KdShadowSet(screen->pScreen,
+        if (!KdShadowSet(pScrn->pScreen,
                          scrpriv->randr, ephyrShadowUpdate, ephyrWindowLinear))
             goto bail4;
     }
@@ -522,11 +514,11 @@ ephyrRandRSetConfig(ScreenPtr pScreen,
          * to use damage to efficiently update display
          * via signal regions what to copy from 'fb'.
          */
-        if (!ephyrSetInternalDamage(screen->pScreen))
+        if (!ephyrSetInternalDamage(pScrn->pScreen))
             goto bail4;
     }
 
-    ephyrSetScreenSizes(screen->pScreen);
+    ephyrSetScreenSizes(pScrn->pScreen);
 
     /*
      * Set frame buffer mapping
@@ -534,10 +526,10 @@ ephyrRandRSetConfig(ScreenPtr pScreen,
     (*pScreen->ModifyPixmapHeader) (fbGetScreenPixmap(pScreen),
                                     pScreen->width,
                                     pScreen->height,
-                                    screen->fb.depth,
-                                    screen->fb.bitsPerPixel,
-                                    screen->fb.byteStride,
-                                    screen->fb.frameBuffer);
+                                    pScrn->fb.depth,
+                                    pScrn->fb.bitsPerPixel,
+                                    pScrn->fb.byteStride,
+                                    pScrn->fb.frameBuffer);
 
     /* set the subpixel order */
 
@@ -553,9 +545,9 @@ ephyrRandRSetConfig(ScreenPtr pScreen,
  bail4:
     EPHYR_LOG("bailed");
 
-    ephyrUnmapFramebuffer(screen);
+    ephyrUnmapFramebuffer(pScrn);
     *scrpriv = oldscr;
-    (void) ephyrMapFramebuffer(screen);
+    (void) ephyrMapFramebuffer(pScrn);
 
     pScreen->width = oldwidth;
     pScreen->height = oldheight;
@@ -586,26 +578,25 @@ ephyrResizeScreen (ScreenPtr           pScreen,
                   int                  newwidth,
                   int                  newheight)
 {
-    KdScreenPriv(pScreen);
-    KdScreenInfo *screen = pScreenPriv->screen;
+    ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
     RRScreenSize size = {0};
     Bool ret;
     int t;
 
-    if (screen->randr & (RR_Rotate_90|RR_Rotate_270)) {
+    if (pScrn->randr & (RR_Rotate_90|RR_Rotate_270)) {
         t = newwidth;
         newwidth = newheight;
         newheight = t;
     }
 
-    if (newwidth == screen->width && newheight == screen->height) {
+    if (newwidth == pScrn->width && newheight == pScrn->height) {
         return FALSE;
     }
 
     size.width = newwidth;
     size.height = newheight;
 
-    ret = ephyrRandRSetConfig (pScreen, screen->randr, 0, &size);
+    ret = ephyrRandRSetConfig (pScreen, pScrn->randr, 0, &size);
     if (ret) {
         RROutputPtr output;
 
@@ -628,15 +619,14 @@ ephyrCreateColormap(ColormapPtr pmap)
 Bool
 ephyrInitScreen(ScreenPtr pScreen)
 {
-    KdScreenPriv(pScreen);
-    KdScreenInfo *screen = pScreenPriv->screen;
+    ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
 
     EPHYR_LOG("pScreen->myNum:%d\n", pScreen->myNum);
-    hostx_set_screen_number(screen, pScreen->myNum);
+    hostx_set_screen_number(pScrn, pScreen->myNum);
     if (EphyrWantNoHostGrab) {
-        hostx_set_win_title(screen, "xephyr");
+        hostx_set_win_title(pScrn, "xephyr");
     } else {
-        hostx_set_win_title(screen, "(ctrl+shift grabs mouse and keyboard)");
+        hostx_set_win_title(pScrn, "(ctrl+shift grabs mouse and keyboard)");
     }
     pScreen->CreateColormap = ephyrCreateColormap;
 
@@ -683,9 +673,8 @@ ephyrFinishInitScreen(ScreenPtr pScreen)
 Bool
 ephyrCreateResources(ScreenPtr pScreen)
 {
-    KdScreenPriv(pScreen);
-    KdScreenInfo *screen = pScreenPriv->screen;
-    EphyrScrPriv *scrpriv = screen->driver;
+    ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
+    EphyrScrPrivPtr scrpriv = pScrn->driverPrivate;
 
     EPHYR_LOG("mark pScreen=%p mynum=%d shadow=%d",
               pScreen, pScreen->myNum, scrpriv->shadow);
@@ -731,12 +720,12 @@ ephyrRestore(KdCardInfo * card)
 }
 
 void
-ephyrScreenFini(KdScreenInfo * screen)
+ephyrScreenFini(ScrnInfoPtr pScrn)
 {
-    EphyrScrPriv *scrpriv = screen->driver;
+    EphyrScrPrivPtr scrpriv = pScrn->driverPrivate;
 
     if (scrpriv->shadow) {
-        KdShadowFbFree(screen);
+        KdShadowFbFree(pScrn);
     }
 }
 
@@ -841,13 +830,13 @@ screen_from_window(Window w)
     for (i = 0; i < screenInfo.numScreens; i++) {
         ScreenPtr pScreen = screenInfo.screens[i];
         KdPrivScreenPtr kdscrpriv = KdGetScreenPriv(pScreen);
-        KdScreenInfo *screen = kdscrpriv->screen;
-        EphyrScrPriv *scrpriv = screen->driver;
+        ScrnInfoPtr pScrn = kdscrpriv->screen;
+        EphyrScrPrivPtr scrpriv = pScrn->driverPrivate;
 
         if (scrpriv->win == w
             || scrpriv->peer_win == w
             || scrpriv->win_pre_existing == w) {
-            return screen;
+            return pScrn;
         }
     }
 
@@ -874,8 +863,8 @@ static void
 ephyrProcessExpose(xcb_generic_event_t *xev)
 {
     xcb_expose_event_t *expose = (xcb_expose_event_t *)xev;
-    KdScreenInfo *screen = screen_from_window(expose->window);
-    EphyrScrPriv *scrpriv = screen->driver;
+    ScrnInfoPtr pScrn = screen_from_window(expose->window);
+    EphyrScrPrivPtr scrpriv = pScrn->driverPrivate;
 
     /* Wait for the last expose event in a series of cliprects
      * to actually paint our screen.
@@ -884,7 +873,7 @@ ephyrProcessExpose(xcb_generic_event_t *xev)
         return;
 
     if (scrpriv) {
-        hostx_paint_rect(scrpriv->screen, 0, 0, 0, 0,
+        hostx_paint_rect(scrpriv->pScrn, 0, 0, 0, 0,
                          scrpriv->win_width,
                          scrpriv->win_height);
     } else {
@@ -896,25 +885,25 @@ static void
 ephyrProcessMouseMotion(xcb_generic_event_t *xev)
 {
     xcb_motion_notify_event_t *motion = (xcb_motion_notify_event_t *)xev;
-    KdScreenInfo *screen = screen_from_window(motion->event);
+    ScrnInfoPtr pScrn = screen_from_window(motion->event);
 
     if (!ephyrMouse ||
         !((EphyrPointerPrivate *) ephyrMouse->driverPrivate)->enabled) {
-        EPHYR_LOG("skipping mouse motion:%d\n", screen->pScreen->myNum);
+        EPHYR_LOG("skipping mouse motion:%d\n", pScrn->pScreen->myNum);
         return;
     }
 
-    if (ephyrCursorScreen != screen->pScreen) {
+    if (ephyrCursorScreen != pScrn->pScreen) {
         EPHYR_LOG("warping mouse cursor. "
                   "cur_screen:%d, motion_screen:%d\n",
-                  ephyrCursorScreen->myNum, screen->pScreen->myNum);
-        ephyrWarpCursor(inputInfo.pointer, screen->pScreen,
+                  ephyrCursorScreen->myNum, pScrn->pScreen->myNum);
+        ephyrWarpCursor(inputInfo.pointer, pScrn->pScreen,
                         motion->event_x, motion->event_y);
     }
     else {
         int x = 0, y = 0;
 
-        EPHYR_LOG("enqueuing mouse motion:%d\n", screen->pScreen->myNum);
+        EPHYR_LOG("enqueuing mouse motion:%d\n", pScrn->pScreen->myNum);
         x = motion->event_x;
         y = motion->event_y;
         EPHYR_LOG("initial (x,y):(%d,%d)\n", x, y);
@@ -922,8 +911,8 @@ ephyrProcessMouseMotion(xcb_generic_event_t *xev)
         /* convert coords into desktop-wide coordinates.
          * fill_pointer_events will convert that back to
          * per-screen coordinates where needed */
-        x += screen->pScreen->x;
-        y += screen->pScreen->y;
+        x += pScrn->pScreen->x;
+        y += pScrn->pScreen->y;
 
         KdEnqueuePointerEvent(ephyrMouse, mouseState | KD_POINTER_DESKTOP, x, y, 0);
     }
@@ -1024,14 +1013,14 @@ ephyrProcessKeyRelease(xcb_generic_event_t *xev)
         ((xcb_key_symbols_get_keysym(keysyms, key->detail, 0) == XK_Control_L
           || xcb_key_symbols_get_keysym(keysyms, key->detail, 0) == XK_Control_R)
          && (key->state & XCB_MOD_MASK_SHIFT)))) {
-        KdScreenInfo *screen = screen_from_window(key->event);
-        EphyrScrPriv *scrpriv = screen->driver;
+        ScrnInfoPtr pScrn = screen_from_window(key->event);
+        EphyrScrPrivPtr scrpriv = pScrn->driverPrivate;
 
         if (grabbed_screen != -1) {
             xcb_ungrab_keyboard(conn, XCB_TIME_CURRENT_TIME);
             xcb_ungrab_pointer(conn, XCB_TIME_CURRENT_TIME);
             grabbed_screen = -1;
-            hostx_set_win_title(screen,
+            hostx_set_win_title(pScrn,
                                 "(ctrl+shift grabs mouse and keyboard)");
         }
         else if (!mod1_down) {
@@ -1068,7 +1057,7 @@ ephyrProcessKeyRelease(xcb_generic_event_t *xev)
                     } else {
                     grabbed_screen = scrpriv->mynum;
                     hostx_set_win_title
-                        (screen,
+                        (pScrn,
                          "(ctrl+shift releases mouse and keyboard)");
                 }
             }
@@ -1094,8 +1083,8 @@ ephyrProcessConfigureNotify(xcb_generic_event_t *xev)
 {
     xcb_configure_notify_event_t *configure =
         (xcb_configure_notify_event_t *)xev;
-    KdScreenInfo *screen = screen_from_window(configure->window);
-    EphyrScrPriv *scrpriv = screen->driver;
+    ScrnInfoPtr pScrn = screen_from_window(configure->window);
+    EphyrScrPrivPtr scrpriv = pScrn->driverPrivate;
 
     if (!scrpriv ||
         (scrpriv->win_pre_existing == None && !EphyrWantResize)) {
@@ -1103,7 +1092,7 @@ ephyrProcessConfigureNotify(xcb_generic_event_t *xev)
     }
 
 #ifdef RANDR
-    ephyrResizeScreen(screen->pScreen, configure->width, configure->height);
+    ephyrResizeScreen(pScrn->pScreen, configure->width, configure->height);
 #endif /* RANDR */
 }
 
@@ -1195,9 +1184,8 @@ ephyrGetColors(ScreenPtr pScreen, int n, xColorItem * pdefs)
 void
 ephyrPutColors(ScreenPtr pScreen, int n, xColorItem * pdefs)
 {
-    KdScreenPriv(pScreen);
-    KdScreenInfo *screen = pScreenPriv->screen;
-    EphyrScrPriv *scrpriv = screen->driver;
+    ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
+    EphyrScrPrivPtr scrpriv = pScrn->driverPrivate;
     int min, max, p;
 
     /* XXX Not sure if this is right */

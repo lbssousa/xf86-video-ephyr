@@ -109,7 +109,7 @@ Bool
  ephyrCardInit(KdCardInfo * card);
 
 Bool
-ephyrScreenInitialize(KdScreenInfo *screen);
+ephyrScreenInitialize(ScrnInfoPtr pScrn);
 
 Bool
  ephyrInitScreen(ScreenPtr pScreen);
@@ -136,7 +136,7 @@ void
  ephyrRestore(KdCardInfo * card);
 
 void
- ephyrScreenFini(KdScreenInfo * screen);
+ ephyrScreenFini(ScrnInfoPtr pScrn);
 
 void
 ephyrCloseScreen(ScreenPtr pScreen);
@@ -151,7 +151,7 @@ void
  ephyrPutColors(ScreenPtr pScreen, int n, xColorItem * pdefs);
 
 Bool
- ephyrMapFramebuffer(KdScreenInfo * screen);
+ ephyrMapFramebuffer(ScrnInfoPtr pScrn);
 
 void *ephyrWindowLinear(ScreenPtr pScreen,
                         CARD32 row,
@@ -161,7 +161,7 @@ void
  ephyrSetScreenSizes(ScreenPtr pScreen);
 
 Bool
- ephyrUnmapFramebuffer(KdScreenInfo * screen);
+ ephyrUnmapFramebuffer(ScrnInfoPtr pScrn);
 
 void
  ephyrUnsetInternalDamage(ScreenPtr pScreen);
@@ -199,7 +199,7 @@ extern KdOsFuncs EphyrOsFuncs;
 
 extern Bool ephyrCursorInit(ScreenPtr pScreen);
 
-extern int ephyrBufferHeight(KdScreenInfo * screen);
+extern int ephyrBufferHeight(ScrnInfoPtr pScrn);
 
 /* ephyr_draw.c */
 
