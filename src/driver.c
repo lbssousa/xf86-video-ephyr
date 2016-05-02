@@ -356,7 +356,10 @@ static Bool NestedPreInit(ScrnInfoPtr pScrn, int flags) {
 
     xf86ShowUnusedOptions(pScrn->scrnIndex, pScrn->options);
 
-    if (!NestedClientCheckDisplay()) {
+    if (hostx_get_xcbconn() != NULL) {
+        xf86DrvMsg(pScrn->scrnIndex, X_INFO, "Reusing current XCB connection to display %s\n",
+                   displayName);
+    } else if (!hostx_init()) {
         xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "Can't open display: %s\n",
                    displayName);
         return FALSE;
