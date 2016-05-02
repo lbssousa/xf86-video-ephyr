@@ -762,8 +762,7 @@ void
 hostx_set_cmap_entry(ScreenPtr pScreen, unsigned char idx,
                      unsigned char r, unsigned char g, unsigned char b)
 {
-    KdScreenPriv(pScreen);
-    KdScreenInfo *pScrn = pScreenPriv->screen;
+    ScrnInfoPtr pScrn = xf86ScreenTopScrn(pScreen);
     EphyrScrPrivPtr scrpriv = pScrn->driver;
 /* need to calculate the shifts for RGB because server could be BGR. */
 /* XXX Not sure if this is correct for 8 on 16, but this works for 8 on 24.*/
@@ -1473,9 +1472,8 @@ out:
 Bool
 ephyr_glamor_init(ScreenPtr screen)
 {
-    KdScreenPriv(screen);
-    KdScreenInfo *kd_screen = pScreenPriv->screen;
-    EphyrScrPrivPtr scrpriv = kd_pScrn->driver;
+    ScrnInfoPtr pScrn = xf86ScreenTopScrn(pScreen);
+    EphyrScrPrivPtr scrpriv = pScrn->driverPrivate;
 
     scrpriv->glamor = ephyr_glamor_glx_screen_init(scrpriv->win);
     ephyr_glamor_set_window_size(scrpriv->glamor,
@@ -1492,9 +1490,8 @@ ephyr_glamor_init(ScreenPtr screen)
 Bool
 ephyr_glamor_create_screen_resources(ScreenPtr pScreen)
 {
-    KdScreenPriv(pScreen);
-    KdScreenInfo *kd_screen = pScreenPriv->screen;
-    EphyrScrPrivPtr scrpriv = kd_pScrn->driver;
+    ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
+    EphyrScrPrivPtr scrpriv = pScrn->driverPrivate;
     PixmapPtr screen_pixmap;
     uint32_t tex;
 
@@ -1543,9 +1540,8 @@ ephyr_glamor_disable(ScreenPtr screen)
 void
 ephyr_glamor_fini(ScreenPtr screen)
 {
-    KdScreenPriv(screen);
-    KdScreenInfo *kd_screen = pScreenPriv->screen;
-    EphyrScrPrivPtr scrpriv = kd_pScrn->driver;
+    ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
+    EphyrScrPrivPtr scrpriv = pScrn->driverPrivate;
 
     glamor_fini(screen);
     ephyr_glamor_glx_screen_fini(scrpriv->glamor);
