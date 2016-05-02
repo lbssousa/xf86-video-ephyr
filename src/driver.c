@@ -45,7 +45,6 @@
 #include <xf86.h>
 #include <xf86Module.h>
 #include <xf86str.h>
-#include "xf86Xinput.h"
 
 #include "compat-api.h"
 
@@ -126,16 +125,6 @@ _X_EXPORT DriverRec NESTED = {
     0     /* PciProbe */
 };
 
-_X_EXPORT InputDriverRec NESTEDINPUT = {
-    1,
-    "nestedinput",
-    NULL,
-    NestedInputPreInit,
-    NestedInputUnInit,
-    NULL,
-    0,
-};
-
 static XF86ModuleVersionInfo NestedVersRec = {
     NESTED_DRIVER_NAME,
     MODULEVENDORSTRING,
@@ -180,8 +169,6 @@ NestedSetup(pointer module, pointer opts, int *errmaj, int *errmin) {
         setupDone = TRUE;
         
         xf86AddDriver(&NESTED, module, HaveDriverFuncs);
-        xf86AddInputDriver(&NESTEDINPUT, module, 0);
-        
         return (pointer)1;
     } else {
         if (errmaj)
@@ -525,14 +512,6 @@ NestedAddMode(ScrnInfoPtr pScrn, int width, int height) {
     return TRUE;
 }
 
-// Wrapper for timed call to NestedInputLoadDriver.  Used with timer in order
-// to force the initialization to wait until the input core is initialized.
-static CARD32
-NestedMouseTimer(OsTimerPtr timer, CARD32 time, pointer arg) {
-    NestedInputLoadDriver(arg);
-    return 0;
-}
-
 static void
 NestedBlockHandler(pointer data, OSTimePtr wt, pointer LastSelectMask) {
     NestedClientPrivatePtr pNestedClient = data;
@@ -576,10 +555,6 @@ static Bool NestedScreenInit(SCREEN_INIT_ARGS_DECL)
         return FALSE;
     }
     
-    // Schedule the NestedInputLoadDriver function to load once the
-    // input core is initialized.
-    TimerSet(NULL, 0, 1, NestedMouseTimer, pNested->clientData);
-
     miClearVisualTypes();
     if (!miSetVisualTypesAndMasks(pScrn->depth,
                                   miGetDefaultVisualMask(pScrn->depth),
