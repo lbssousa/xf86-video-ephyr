@@ -127,6 +127,7 @@ hostx_want_screen_geometry(ScrnInfoPtr screen, int *width, int *height, int *x, 
     return 0;
 }
 
+/* TODO: This function should be merged with driver's PreInit(). */
 void
 hostx_add_screen(ScrnInfoPtr screen, unsigned long win_id, int screen_num, Bool use_geometry, const char *output)
 {
@@ -487,105 +488,6 @@ hostx_init(void)
                         strlen("_NET_WM_STATE_FULLSCREEN"),
                         "_NET_WM_STATE_FULLSCREEN");
 
-    for (index = 0; index < HostX.n_screens; index++) {
-        ScrnInfoPTr screen = HostX.screens[index];
-        EphyrScrPriv *scrpriv = screen->driverPrivate;
-
-        scrpriv->win = xcb_generate_id(HostX.conn);
-        scrpriv->server_depth = HostX.depth;
-        scrpriv->ximg = NULL;
-        scrpriv->win_x = 0;
-        scrpriv->win_y = 0;
-
-        if (scrpriv->win_pre_existing != XCB_WINDOW_NONE) {
-            xcb_get_geometry_reply_t *prewin_geom;
-            xcb_get_geometry_cookie_t cookie;
-            xcb_generic_error_t *e = NULL;
-
-            /* Get screen size from existing window */
-            cookie = xcb_get_geometry(HostX.conn,
-                                      scrpriv->win_pre_existing);
-            prewin_geom = xcb_get_geometry_reply(HostX.conn, cookie, &e);
-
-            if (e) {
-                free(e);
-                free(prewin_geom);
-                return FALSE;
-            }
-
-            scrpriv->win_width  = prewin_geom->width;
-            scrpriv->win_height = prewin_geom->height;
-
-            free(prewin_geom);
-
-            xcb_create_window(HostX.conn,
-                              XCB_COPY_FROM_PARENT,
-                              scrpriv->win,
-                              scrpriv->win_pre_existing,
-                              0,0,
-                              scrpriv->win_width,
-                              scrpriv->win_height,
-                              0,
-                              XCB_WINDOW_CLASS_COPY_FROM_PARENT,
-                              HostX.visual->visual_id,
-                              attr_mask,
-                              attrs);
-        } else {
-            xcb_create_window(HostX.conn,
-                              XCB_COPY_FROM_PARENT,
-                              scrpriv->win,
-                              HostX.winroot,
-                              0,0,100,100, /* will resize */
-                              0,
-                              XCB_WINDOW_CLASS_COPY_FROM_PARENT,
-                              HostX.visual->visual_id,
-                              attr_mask,
-                              attrs);
-
-            hostx_set_win_title(screen,
-                                "(ctrl+shift grabs mouse and keyboard)");
-
-            if (HostX.use_fullscreen) {
-                scrpriv->win_width  = xscreen->width_in_pixels;
-                scrpriv->win_height = xscreen->height_in_pixels;
-
-                hostx_set_fullscreen_hint();
-            } else if (scrpriv->output) {
-                hostx_get_output_geometry(scrpriv->output,
-                                          &scrpriv->win_x,
-                                          &scrpriv->win_y,
-                                          &scrpriv->win_width,
-                                          &scrpriv->win_height);
-
-                HostX.use_fullscreen = TRUE;
-                hostx_set_fullscreen_hint();
-            }
-
-            tmpstr = getenv("RESOURCE_NAME");
-
-            if (tmpstr && (!ephyrResNameFromCmd)) {
-                ephyrResName = tmpstr;
-            }
-
-            class_len = strlen(ephyrResName) + 1 + strlen("Xorg") + 1;
-            class_hint = malloc(class_len);
-
-            if (class_hint) {
-                strcpy(class_hint, ephyrResName);
-                strcpy(class_hint + strlen(ephyrResName) + 1, "Xorg");
-                xcb_change_property(HostX.conn,
-                                    XCB_PROP_MODE_REPLACE,
-                                    scrpriv->win,
-                                    XCB_ATOM_WM_CLASS,
-                                    XCB_ATOM_STRING,
-                                    8,
-                                    class_len,
-                                    class_hint);
-                free(class_hint);
-            }
-        }
-    }
-
     if (!xcb_aux_parse_color("red", &red, &green, &blue)) {
         xcb_lookup_color_cookie_t c =
             xcb_lookup_color(HostX.conn, xscreen->default_colormap, 3, "red");
@@ -630,17 +532,6 @@ hostx_init(void)
 
     if (!hostx_want_host_cursor ()) {
         CursorVisible = TRUE;
-
-        /* Ditch the cursor, we provide our 'own' */
-        for (index = 0; index < HostX.n_screens; index++) {
-            ScrnInfoPtr screen = HostX.screens[index];
-            EphyrScrPriv *scrpriv = screen->driverPrivate;
-
-            xcb_change_window_attributes(HostX.conn,
-                                         scrpriv->win,
-                                         XCB_CW_CURSOR,
-                                         &HostX.empty_cursor);
-        }
     }
 
     /* Try to get share memory ximages for a little bit more speed */
@@ -686,6 +577,115 @@ hostx_init(void)
     }
 
     return TRUE;
+}
+
+Bool
+hostx_init_window(ScrnInfoPtr pScrn) {
+    EphyrScrPrivPtr scrpriv = pScrn->driverPrivate;
+
+    scrpriv->win = xcb_generate_id(HostX.conn);
+    scrpriv->server_depth = HostX.depth;
+    scrpriv->ximg = NULL;
+    scrpriv->win_x = 0;
+    scrpriv->win_y = 0;
+
+    if (scrpriv->win_pre_existing != XCB_WINDOW_NONE) {
+        xcb_get_geometry_reply_t *prewin_geom;
+        xcb_get_geometry_cookie_t cookie;
+        xcb_generic_error_t *e = NULL;
+
+        /* Get screen size from existing window */
+        cookie = xcb_get_geometry(HostX.conn,
+                                  scrpriv->win_pre_existing);
+        prewin_geom = xcb_get_geometry_reply(HostX.conn, cookie, &e);
+
+        if (e) {
+            free(e);
+            free(prewin_geom);
+            return FALSE;
+        }
+
+        scrpriv->win_width  = prewin_geom->width;
+        scrpriv->win_height = prewin_geom->height;
+
+        free(prewin_geom);
+
+        xcb_create_window(HostX.conn,
+                          XCB_COPY_FROM_PARENT,
+                          scrpriv->win,
+                          scrpriv->win_pre_existing,
+                          0,0,
+                          scrpriv->win_width,
+                          scrpriv->win_height,
+                          0,
+                          XCB_WINDOW_CLASS_COPY_FROM_PARENT,
+                          HostX.visual->visual_id,
+                          attr_mask,
+                          attrs);
+    } else {
+        xcb_create_window(HostX.conn,
+                          XCB_COPY_FROM_PARENT,
+                          scrpriv->win,
+                          HostX.winroot,
+                          0,0,100,100, /* will resize */
+                          0,
+                          XCB_WINDOW_CLASS_COPY_FROM_PARENT,
+                          HostX.visual->visual_id,
+                          attr_mask,
+                          attrs);
+
+        hostx_set_win_title(screen,
+                            "(ctrl+shift grabs mouse and keyboard)");
+
+        if (HostX.use_fullscreen) {
+            scrpriv->win_width  = xscreen->width_in_pixels;
+            scrpriv->win_height = xscreen->height_in_pixels;
+
+            hostx_set_fullscreen_hint();
+        } else if (scrpriv->output) {
+            hostx_get_output_geometry(scrpriv->output,
+                                      &scrpriv->win_x,
+                                      &scrpriv->win_y,
+                                      &scrpriv->win_width,
+                                      &scrpriv->win_height);
+
+            HostX.use_fullscreen = TRUE;
+            hostx_set_fullscreen_hint();
+        }
+
+        tmpstr = getenv("RESOURCE_NAME");
+
+        if (tmpstr && (!ephyrResNameFromCmd)) {
+            ephyrResName = tmpstr;
+        }
+
+        class_len = strlen(ephyrResName) + 1 + strlen("Xorg") + 1;
+        class_hint = malloc(class_len);
+
+        if (class_hint) {
+            strcpy(class_hint, ephyrResName);
+            strcpy(class_hint + strlen(ephyrResName) + 1, "Xorg");
+            xcb_change_property(HostX.conn,
+                                XCB_PROP_MODE_REPLACE,
+                                scrpriv->win,
+                                XCB_ATOM_WM_CLASS,
+                                XCB_ATOM_STRING,
+                                8,
+                                class_len,
+                                class_hint);
+            free(class_hint);
+        }
+    }
+
+    if (!hostx_want_host_cursor()) {
+        /* Ditch the cursor, we provide our 'own' */
+        xcb_change_window_attributes(HostX.conn,
+                                     scrpriv->win,
+                                     XCB_CW_CURSOR,
+                                     &HostX.empty_cursor);
+    }
+
+    return TRUE
 }
 
 int
