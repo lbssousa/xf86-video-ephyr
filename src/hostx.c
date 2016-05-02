@@ -76,7 +76,7 @@ struct EphyrHostXVars {
     Bool have_shm;
 
     int n_screens;
-    KdScreenInfo **screens;
+    ScrnInfoPtr *screens;
 
     long damage_debug_msec;
 };
@@ -110,7 +110,7 @@ static void
 #define host_depth_matches_server(_vars) (HostX.depth == (_vars)->server_depth)
 
 int
-hostx_want_screen_geometry(KdScreenInfo *screen, int *width, int *height, int *x, int *y)
+hostx_want_screen_geometry(ScrnInfoPtr screen, int *width, int *height, int *x, int *y)
 {
     EphyrScrPriv *scrpriv = screen->driver;
 
@@ -128,7 +128,7 @@ hostx_want_screen_geometry(KdScreenInfo *screen, int *width, int *height, int *x
 }
 
 void
-hostx_add_screen(KdScreenInfo *screen, unsigned long win_id, int screen_num, Bool use_geometry, const char *output)
+hostx_add_screen(ScrnInfoPtr screen, unsigned long win_id, int screen_num, Bool use_geometry, const char *output)
 {
     EphyrScrPriv *scrpriv = screen->driver;
     int index = HostX.n_screens;
@@ -151,9 +151,9 @@ hostx_set_display_name(char *name)
 }
 
 void
-hostx_set_screen_number(KdScreenInfo *screen, int number)
+hostx_set_screen_number(ScrnInfoPtr screen, int number)
 {
-    EphyrScrPriv *scrpriv = screen->driver;
+    EphyrScrPriv *scrpriv = screen->driverPrivate;
 
     if (scrpriv) {
         scrpriv->mynum = number;
@@ -162,9 +162,9 @@ hostx_set_screen_number(KdScreenInfo *screen, int number)
 }
 
 void
-hostx_set_win_title(KdScreenInfo *screen, const char *extra_text)
+hostx_set_win_title(ScrnInfoPtr screen, const char *extra_text)
 {
-    EphyrScrPriv *scrpriv = screen->driver;
+    EphyrScrPriv *scrpriv = screen->driverPrivate;
 
     if (!scrpriv)
         return;
@@ -181,7 +181,7 @@ hostx_set_win_title(KdScreenInfo *screen, const char *extra_text)
         char buf[BUF_LEN + 1];
 
         memset(buf, 0, BUF_LEN + 1);
-        snprintf(buf, BUF_LEN, "Xephyr on %s.%d %s",
+        snprintf(buf, BUF_LEN, "Xorg on %s.%d %s",
                  HostX.server_dpy_name ? HostX.server_dpy_name : ":0",
                  scrpriv->mynum, (extra_text != NULL) ? extra_text : "");
 
@@ -214,9 +214,9 @@ hostx_get_empty_cursor(void)
 }
 
 int
-hostx_want_preexisting_window(KdScreenInfo *screen)
+hostx_want_preexisting_window(ScrnInfoPtr screen)
 {
-    EphyrScrPriv *scrpriv = screen->driver;
+    EphyrScrPriv *scrpriv = screen->driverPrivate;
 
     if (scrpriv && scrpriv->win_pre_existing) {
         return 1;
@@ -487,8 +487,8 @@ hostx_init(void)
                         "_NET_WM_STATE_FULLSCREEN");
 
     for (index = 0; index < HostX.n_screens; index++) {
-        KdScreenInfo *screen = HostX.screens[index];
-        EphyrScrPriv *scrpriv = screen->driver;
+        ScrnInfoPTr screen = HostX.screens[index];
+        EphyrScrPriv *scrpriv = screen->driverPrivate;
 
         scrpriv->win = xcb_generate_id(HostX.conn);
         scrpriv->server_depth = HostX.depth;
@@ -632,8 +632,8 @@ hostx_init(void)
 
         /* Ditch the cursor, we provide our 'own' */
         for (index = 0; index < HostX.n_screens; index++) {
-            KdScreenInfo *screen = HostX.screens[index];
-            EphyrScrPriv *scrpriv = screen->driver;
+            ScrnInfoPtr screen = HostX.screens[index];
+            EphyrScrPriv *scrpriv = screen->driverPrivate;
 
             xcb_change_window_attributes(HostX.conn,
                                          scrpriv->win,
@@ -644,7 +644,7 @@ hostx_init(void)
 
     /* Try to get share memory ximages for a little bit more speed */
     if (!hostx_has_extension(&xcb_shm_id) || getenv("XEPHYR_NO_SHM")) {
-        fprintf(stderr, "\nXephyr unable to use SHM XImages\n");
+        fprintf(stderr, "\nNested Xorg unable to use SHM XImages\n");
         HostX.have_shm = FALSE;
     } else {
         /* Really really check we have shm - better way ?*/
@@ -664,7 +664,7 @@ hostx_init(void)
         e = xcb_request_check(HostX.conn, cookie);
 
         if (e) {
-            fprintf(stderr, "\nXephyr unable to use SHM XImages\n");
+            fprintf(stderr, "\nNested Xorg unable to use SHM XImages\n");
             HostX.have_shm = FALSE;
             free(e);
         }
@@ -694,17 +694,17 @@ hostx_get_depth(void)
 }
 
 int
-hostx_get_server_depth(KdScreenInfo *screen)
+hostx_get_server_depth(ScrnInfoPtr screen)
 {
-    EphyrScrPriv *scrpriv = screen->driver;
+    EphyrScrPriv *scrpriv = screen->driverPrivate;
 
     return scrpriv ? scrpriv->server_depth : 0;
 }
 
 int
-hostx_get_bpp(KdScreenInfo *screen)
+hostx_get_bpp(ScrnInfoPtr screen)
 {
-    EphyrScrPriv *scrpriv = screen->driver;
+    EphyrScrPriv *scrpriv = screen->driverPrivate;
 
     if (!scrpriv)
         return 0;
@@ -716,10 +716,10 @@ hostx_get_bpp(KdScreenInfo *screen)
 }
 
 void
-hostx_get_visual_masks(KdScreenInfo *screen,
+hostx_get_visual_masks(ScrnInfoPtr screen,
                        CARD32 *rmsk, CARD32 *gmsk, CARD32 *bmsk)
 {
-    EphyrScrPriv *scrpriv = screen->driver;
+    EphyrScrPriv *scrpriv = screen->driverPrivate;
 
     if (!scrpriv)
         return;
@@ -793,12 +793,12 @@ hostx_set_cmap_entry(ScreenPtr pScreen, unsigned char idx,
  * by fakexa for storing offscreen pixmap data.
  */
 void *
-hostx_screen_init(KdScreenInfo *screen,
+hostx_screen_init(ScrnInfoPTr screen,
                   int x, int y,
                   int width, int height, int buffer_height,
                   int *bytes_per_line, int *bits_per_pixel)
 {
-    EphyrScrPriv *scrpriv = screen->driver;
+    EphyrScrPriv *scrpriv = screen->driverPrivate;
     Bool shm_success = FALSE;
 
     if (!scrpriv) {
@@ -952,14 +952,14 @@ hostx_screen_init(KdScreenInfo *screen,
     }
 }
 
-static void hostx_paint_debug_rect(KdScreenInfo *screen,
+static void hostx_paint_debug_rect(ScrnInfoPtr screen,
                                    int x, int y, int width, int height);
 
 void
-hostx_paint_rect(KdScreenInfo *screen,
+hostx_paint_rect(ScrnInfoPtr screen,
                  int sx, int sy, int dx, int dy, int width, int height)
 {
-    EphyrScrPriv *scrpriv = screen->driver;
+    EphyrScrPriv *scrpriv = screen->driverPrivate;
 
     EPHYR_DBG("painting in screen %d\n", scrpriv->mynum);
 
@@ -1061,10 +1061,10 @@ hostx_paint_rect(KdScreenInfo *screen,
 }
 
 static void
-hostx_paint_debug_rect(KdScreenInfo *screen,
+hostx_paint_debug_rect(ScrnInfoPtr screen,
                        int x, int y, int width, int height)
 {
-    EphyrScrPriv *scrpriv = screen->driver;
+    EphyrScrPriv *scrpriv = screen->driverPrivate;
     struct timespec tspec;
     xcb_rectangle_t rect = { .x = x, .y = y, .width = width, .height = height };
     xcb_void_cookie_t cookie;

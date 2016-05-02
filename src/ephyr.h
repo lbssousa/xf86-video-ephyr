@@ -81,7 +81,7 @@ typedef struct _ephyrScrPriv {
     unsigned char *fb_data;     /* only used when host bpp != server bpp */
     xcb_shm_segment_info_t shminfo;
 
-    KdScreenInfo *screen;
+    ScrnInfoPtr screen;
     int mynum;                  /* Screen number */
     unsigned long cmap[256];
 
@@ -90,7 +90,7 @@ typedef struct _ephyrScrPriv {
      * ephyr_glamor_glx.c)
      */
     struct ephyr_glamor *glamor;
-} EphyrScrPriv;
+} EphyrScrPriv, *EphyrScrPrivPtr;
 
 extern KdCardFuncs ephyrFuncs;
 extern KdKeyboardInfo *ephyrKbd;

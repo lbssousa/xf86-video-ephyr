@@ -69,7 +69,7 @@ typedef struct {
     short x1, y1, x2, y2;
 } EphyrRect;
 
-int hostx_want_screen_geometry(KdScreenInfo *screen, int *width, int *height, int *x, int *y);
+int hostx_want_screen_geometry(ScrnInfoPtr screen, int *width, int *height, int *x, int *y);
 int hostx_want_host_cursor(void);
 void hostx_use_sw_cursor(void);
 xcb_cursor_t hostx_get_empty_cursor(void);
@@ -79,28 +79,28 @@ void hostx_get_output_geometry(const char *output,
 
 void hostx_use_fullscreen(void);
 int hostx_want_fullscreen(void);
-int hostx_want_preexisting_window(KdScreenInfo *screen);
+int hostx_want_preexisting_window(ScrnInfoPtr screen);
 void hostx_use_preexisting_window(unsigned long win_id);
 void hostx_use_resname(char *name, int fromcmd);
 void hostx_set_title(char *name);
 void hostx_handle_signal(int signum);
 int hostx_init(void);
-void hostx_add_screen(KdScreenInfo *screen, unsigned long win_id, int screen_num, Bool use_geometry, const char *output);
+void hostx_add_screen(ScrnInfoPtr screen, unsigned long win_id, int screen_num, Bool use_geometry, const char *output);
 void hostx_set_display_name(char *name);
-void hostx_set_screen_number(KdScreenInfo *screen, int number);
-void hostx_set_win_title(KdScreenInfo *screen, const char *extra_text);
+void hostx_set_screen_number(ScrnInfoPtr screen, int number);
+void hostx_set_win_title(ScrnInfoPtr screen, const char *extra_text);
 int hostx_get_depth(void);
-int hostx_get_server_depth(KdScreenInfo *screen);
-int hostx_get_bpp(KdScreenInfo *screen);
-void hostx_get_visual_masks(KdScreenInfo *screen,
+int hostx_get_server_depth(ScrnInfoPtr screen);
+int hostx_get_bpp(ScrnInfoPtr screen);
+void hostx_get_visual_masks(ScrnInfoPtr screen,
                        CARD32 *rmsk, CARD32 *gmsk, CARD32 *bmsk);
 void hostx_set_cmap_entry(ScreenPtr pScreen, unsigned char idx,
                      unsigned char r, unsigned char g, unsigned char b);
-void *hostx_screen_init(KdScreenInfo *screen,
+void *hostx_screen_init(ScrnInfoPtr screen,
                         int x, int y,
                         int width, int height, int buffer_height,
                         int *bytes_per_line, int *bits_per_pixel);
-void hostx_paint_rect(KdScreenInfo *screen,
+void hostx_paint_rect(ScrnInfoPtr screen,
                  int sx, int sy, int dx, int dy, int width, int height);
 Bool hostx_load_keymap(KeySymsPtr keySyms, CARD8 *modmap, XkbControlsPtr controls);
 xcb_connection_t *hostx_get_xcbconn(void);

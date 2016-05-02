@@ -48,6 +48,8 @@
 
 #include "compat-api.h"
 
+#include "ephyr.h"
+
 #define NESTED_VERSION 0
 #define NESTED_NAME "NESTED"
 #define NESTED_DRIVER_NAME "nested"
@@ -266,9 +268,11 @@ static Bool NestedAllocatePrivate(ScrnInfoPtr pScrn) {
         return FALSE;
     }
 
-    pScrn->driverPrivate = xnfcalloc(sizeof(NestedPrivate), 1);
+    pScrn->driverPrivate = xnfcalloc(sizeof(EphyrScrPriv), 1);
+
     if (pScrn->driverPrivate == NULL)
         return FALSE;
+
     return TRUE;
 }
 
