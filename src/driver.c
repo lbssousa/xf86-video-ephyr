@@ -27,6 +27,7 @@
  * Colin Hill <colin.james.hill@gmail.com>
  * Weseung Hwang <weseung@gmail.com>
  * Nathaniel Way <nathanielcw@hotmail.com>
+ * Laércio de Sousa <laerciosousa@sme-mogidascruzes.sp.gov.br>
  */
 
 #include <stdlib.h>
@@ -47,9 +48,6 @@
 #include "xf86Xinput.h"
 
 #include "compat-api.h"
-
-#include "client.h"
-#include "nested_input.h"
 
 #define NESTED_VERSION 0
 #define NESTED_NAME "NESTED"
@@ -95,6 +93,7 @@ void NestedPrintMode(ScrnInfoPtr p, DisplayModePtr m);
 
 typedef enum {
     OPTION_DISPLAY,
+    OPTION_XAUTHORITY,
     OPTION_ORIGIN
 } NestedOpts;
 
@@ -107,13 +106,11 @@ static SymTabRec NestedChipsets[] = {
     {-1,            NULL }
 };
 
-/* XXX: Shouldn't we allow NestedClient to define options too? If some day we
- * port NestedClient to something that's not Xlib/Xcb we might need to add some
- * custom options */
 static OptionInfoRec NestedOptions[] = {
-    { OPTION_DISPLAY, "Display", OPTV_STRING, {0}, FALSE },
-    { OPTION_ORIGIN,  "Origin",  OPTV_STRING, {0}, FALSE },
-    { -1,             NULL,      OPTV_NONE,   {0}, FALSE }
+    { OPTION_DISPLAY,    "Display",    OPTV_STRING, {0}, FALSE },
+    { OPTION_XAUTHORITY, "Xauthority", OPTV_STRING, {0}, FALSE },
+    { OPTION_ORIGIN,     "Origin",     OPTV_STRING, {0}, FALSE },
+    { -1,                NULL,         OPTV_NONE,   {0}, FALSE }
 };
 
 _X_EXPORT DriverRec NESTED = {
@@ -162,7 +159,6 @@ _X_EXPORT XF86ModuleData nestedModuleData = {
 
 /* These stuff should be valid to all server generations */
 typedef struct NestedPrivate {
-    char                        *displayName;
     int                          originX;
     int                          originY;
     NestedClientPrivatePtr       clientData;
@@ -303,6 +299,7 @@ static void NestedFreePrivate(ScrnInfoPtr pScrn) {
 /* Data from here is valid to all server generations */
 static Bool NestedPreInit(ScrnInfoPtr pScrn, int flags) {
     NestedPrivatePtr pNested;
+    const char *displayName = getenv("DISPLAY");
     char *originString = NULL;
 
     xf86DrvMsg(pScrn->scrnIndex, X_INFO, "NestedPreInit\n");
@@ -338,12 +335,17 @@ static Bool NestedPreInit(ScrnInfoPtr pScrn, int flags) {
     xf86ProcessOptions(pScrn->scrnIndex, pScrn->options, NestedOptions);
 
     if (xf86IsOptionSet(NestedOptions, OPTION_DISPLAY)) {
-        pNested->displayName = xf86GetOptValString(NestedOptions,
-                                                   OPTION_DISPLAY);
+        displayName = xf86GetOptValString(NestedOptions,
+                                          OPTION_DISPLAY);
+        setenv("DISPLAY", displayName, TRUE);
         xf86DrvMsg(pScrn->scrnIndex, X_INFO, "Using display \"%s\"\n",
-                   pNested->displayName);
-    } else {
-        pNested->displayName = NULL;
+                   displayName);
+    }
+
+    if (xf86IsOptionSet(NestedOptions, OPTION_XAUTHORITY)) {
+        setenv("XAUTHORITY",
+               xf86GetOptValString(NestedOptions, OPTION_XAUTHORITY),
+               TRUE);
     }
 
     if (xf86IsOptionSet(NestedOptions, OPTION_ORIGIN)) {
@@ -363,9 +365,9 @@ static Bool NestedPreInit(ScrnInfoPtr pScrn, int flags) {
 
     xf86ShowUnusedOptions(pScrn->scrnIndex, pScrn->options);
 
-    if (!NestedClientCheckDisplay(pNested->displayName)) {
+    if (!NestedClientCheckDisplay()) {
         xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "Can't open display: %s\n",
-                   pNested->displayName);
+                   displayName);
         return FALSE;
     }
 
@@ -561,7 +563,6 @@ static Bool NestedScreenInit(SCREEN_INIT_ARGS_DECL)
     //Load_Nested_Mouse();
 
     pNested->clientData = NestedClientCreateScreen(pScrn->scrnIndex,
-                                                   pNested->displayName,
                                                    pScrn->virtualX,
                                                    pScrn->virtualY,
                                                    pNested->originX,
