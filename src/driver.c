@@ -148,21 +148,6 @@ _X_EXPORT XF86ModuleData nestedModuleData = {
     NULL, /* teardown */
 };
 
-/* These stuff should be valid to all server generations */
-typedef struct NestedPrivate {
-    int                          originX;
-    int                          originY;
-    NestedClientPrivatePtr       clientData;
-    CreateScreenResourcesProcPtr CreateScreenResources;
-    CloseScreenProcPtr           CloseScreen;
-    ShadowUpdateProc             update;
-} NestedPrivate, *NestedPrivatePtr;
-
-#define PNESTED(p)    ((NestedPrivatePtr)((p)->driverPrivate))
-#define PCLIENTDATA(p) (PNESTED(p)->clientData)
-
-/*static ScrnInfoPtr NESTEDScrn;*/
-
 static pointer
 NestedSetup(pointer module, pointer opts, int *errmaj, int *errmin) {
     static Bool setupDone = FALSE;
@@ -289,7 +274,7 @@ static void NestedFreePrivate(ScrnInfoPtr pScrn) {
 
 /* Data from here is valid to all server generations */
 static Bool NestedPreInit(ScrnInfoPtr pScrn, int flags) {
-    NestedPrivatePtr pNested;
+    EphyrScrPrivPtr scrpriv = pScrn->driverPrivate;
     const char *displayName = getenv("DISPLAY");
     char *originString = NULL;
 
@@ -302,8 +287,6 @@ static Bool NestedPreInit(ScrnInfoPtr pScrn, int flags) {
         xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "Failed to allocate private\n");
         return FALSE;
     }
-
-    pNested = PNESTED(pScrn);
 
     if (!xf86SetDepthBpp(pScrn, 0, 0, 0, Support24bppFb | Support32bppFb))
         return FALSE;
@@ -341,17 +324,14 @@ static Bool NestedPreInit(ScrnInfoPtr pScrn, int flags) {
 
     if (xf86IsOptionSet(NestedOptions, OPTION_ORIGIN)) {
         originString = xf86GetOptValString(NestedOptions, OPTION_ORIGIN);
-        if (sscanf(originString, "%d %d", &pNested->originX,
-            &pNested->originY) != 2) {
+        if (sscanf(originString, "%d %d", &scrpriv->win_x,
+            &scrpriv->win_y) != 2) {
             xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
                        "Invalid value for option \"Origin\"\n");
             return FALSE;
         }
         xf86DrvMsg(pScrn->scrnIndex, X_INFO, "Using origin x:%d y:%d\n",
-                   pNested->originX, pNested->originY);
-    } else {
-        pNested->originX = 0;
-        pNested->originY = 0;
+                   scrpriv->win_x, scrpriv->win_y);
     }
 
     xf86ShowUnusedOptions(pScrn->scrnIndex, pScrn->options);
@@ -365,16 +345,11 @@ static Bool NestedPreInit(ScrnInfoPtr pScrn, int flags) {
         return FALSE;
     }
 
+    /* TODO: replace with corresponding Xephyr function.
     if (!NestedClientValidDepth(pScrn->depth)) {
         xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "Invalid depth: %d\n",
                    pScrn->depth);
         return FALSE;
-    }
-
-    /*if (pScrn->depth > 1) {
-        Gamma zeros = {0.0, 0.0, 0.0};
-        if (!xf86SetGamma(pScrn, zeros))
-            return FALSE;
     }*/
 
     if (NestedValidateModes(pScrn) < 1) {
@@ -532,26 +507,18 @@ NestedWakeupHandler(pointer data, int i, pointer LastSelectMask) {
 static Bool NestedScreenInit(SCREEN_INIT_ARGS_DECL)
 {
     ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
-    NestedPrivatePtr pNested;
+    EphyrScrPrivPtr scrpriv = pScrn->driverPrivate;
     Pixel redMask, greenMask, blueMask;
 
     xf86DrvMsg(pScrn->scrnIndex, X_INFO, "NestedScreenInit\n");
-
-    pNested = PNESTED(pScrn);
-    /*NESTEDScrn = pScrn;*/
-
     NestedPrintPscreen(pScrn);
 
-    /* Save state:
-     * NestedSave(pScrn); */
-    
-    //Load_Nested_Mouse();
-
+    /* TODO: replace with corresponding Xephyr function
     pNested->clientData = NestedClientCreateScreen(pScrn->scrnIndex,
                                                    pScrn->virtualX,
                                                    pScrn->virtualY,
-                                                   pNested->originX,
-                                                   pNested->originY,
+                                                   scrpriv->win_x,
+                                                   scrpriv->win_y,
                                                    pScrn->depth,
                                                    pScrn->bitsPerPixel,
                                                    &redMask, &greenMask, &blueMask);
@@ -559,7 +526,7 @@ static Bool NestedScreenInit(SCREEN_INIT_ARGS_DECL)
     if (!pNested->clientData) {
         xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "Failed to create client screen\n");
         return FALSE;
-    }
+    } */
     
     miClearVisualTypes();
     if (!miSetVisualTypesAndMasks(pScrn->depth,
@@ -571,10 +538,11 @@ static Bool NestedScreenInit(SCREEN_INIT_ARGS_DECL)
     if (!miSetPixmapDepths())
         return FALSE;
 
+    /* TODO: replace with corresponding Xephyr function
     if (!fbScreenInit(pScreen, NestedClientGetFrameBuffer(PCLIENTDATA(pScrn)),
                       pScrn->virtualX, pScrn->virtualY, pScrn->xDpi,
                       pScrn->yDpi, pScrn->displayWidth, pScrn->bitsPerPixel))
-        return FALSE;
+        return FALSE; */
 
     fbPictureInit(pScreen, 0, 0);
 
@@ -585,19 +553,19 @@ static Bool NestedScreenInit(SCREEN_INIT_ARGS_DECL)
     if (!miCreateDefColormap(pScreen))
         return FALSE;
 
-    pNested->update = NestedShadowUpdate;
+    scrpriv->update = NestedShadowUpdate;
     pScreen->SaveScreen = NestedSaveScreen;
 
     if (!shadowSetup(pScreen))
         return FALSE;
 
-    pNested->CreateScreenResources = pScreen->CreateScreenResources;
+    scrpriv->CreateScreenResources = pScreen->CreateScreenResources;
     pScreen->CreateScreenResources = NestedCreateScreenResources;
 
-    pNested->CloseScreen = pScreen->CloseScreen;
+    scrpriv->CloseScreen = pScreen->CloseScreen;
     pScreen->CloseScreen = NestedCloseScreen;
 
-    RegisterBlockAndWakeupHandlers(NestedBlockHandler, NestedWakeupHandler, pNested->clientData);
+    RegisterBlockAndWakeupHandlers(NestedBlockHandler, NestedWakeupHandler, scrpriv);
 
     return TRUE;
 }
@@ -606,15 +574,15 @@ static Bool
 NestedCreateScreenResources(ScreenPtr pScreen) {
     xf86DrvMsg(pScreen->myNum, X_INFO, "NestedCreateScreenResources\n");
     ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
-    NestedPrivatePtr pNested = PNESTED(pScrn);
+    EphyrScrPrivPtr scrpriv = pScrn->driverPrivate;
     Bool ret;
 
-    pScreen->CreateScreenResources = pNested->CreateScreenResources;
+    pScreen->CreateScreenResources = scrpriv->CreateScreenResources;
     ret = pScreen->CreateScreenResources(pScreen);
     pScreen->CreateScreenResources = NestedCreateScreenResources;
 
     if(!shadowAdd(pScreen, pScreen->GetScreenPixmap(pScreen),
-                  pNested->update, NULL, 0, 0)) {
+                  scrpriv->update, NULL, 0, 0)) {
         xf86DrvMsg(pScreen->myNum, X_ERROR, "NestedCreateScreenResources failed to shadowAdd.\n");
         return FALSE;
     }
@@ -624,24 +592,29 @@ NestedCreateScreenResources(ScreenPtr pScreen) {
 
 static void
 NestedShadowUpdate(ScreenPtr pScreen, shadowBufPtr pBuf) {
+    ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
+    EphyrScrPrivPtr scrpriv = pScrn->driverPrivate;
+
     RegionPtr pRegion = DamageRegion(pBuf->pDamage);
-    NestedClientUpdateScreen(PCLIENTDATA(xf86ScreenToScrn(pScreen)),
+    /* TODO: replace with corresponding Xephyr function
+    NestedClientUpdateScreen(scrpriv,
                              pRegion->extents.x1, pRegion->extents.y1,
-                             pRegion->extents.x2, pRegion->extents.y2);
+                             pRegion->extents.x2, pRegion->extents.y2); */
 }
 
 static Bool
 NestedCloseScreen(CLOSE_SCREEN_ARGS_DECL) {
     ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
+    EphyrScrPrivPtr scrpriv = pScrn->driverPrivate;
 
     xf86DrvMsg(pScrn->scrnIndex, X_INFO, "NestedCloseScreen\n");
 
     shadowRemove(pScreen, pScreen->GetScreenPixmap(pScreen));
 
-    RemoveBlockAndWakeupHandlers(NestedBlockHandler, NestedWakeupHandler, PNESTED(pScrn)->clientData);
-    NestedClientCloseScreen(PCLIENTDATA(pScrn));
-
-    pScreen->CloseScreen = PNESTED(pScrn)->CloseScreen;
+    RemoveBlockAndWakeupHandlers(NestedBlockHandler, NestedWakeupHandler, scrpriv);
+    /* TODO: replace with corresponding Xephyr function.
+    NestedClientCloseScreen(scrpriv); */
+    pScreen->CloseScreen = scrpriv->CloseScreen;
     return (*pScreen->CloseScreen)(CLOSE_SCREEN_ARGS);
 }
 
