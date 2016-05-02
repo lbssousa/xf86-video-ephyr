@@ -274,7 +274,6 @@ static void NestedFreePrivate(ScrnInfoPtr pScrn) {
 
 /* Data from here is valid to all server generations */
 static Bool NestedPreInit(ScrnInfoPtr pScrn, int flags) {
-    EphyrScrPrivPtr scrpriv = pScrn->driverPrivate;
     const char *displayName = getenv("DISPLAY");
     char *originString = NULL;
 
@@ -324,14 +323,16 @@ static Bool NestedPreInit(ScrnInfoPtr pScrn, int flags) {
 
     if (xf86IsOptionSet(NestedOptions, OPTION_ORIGIN)) {
         originString = xf86GetOptValString(NestedOptions, OPTION_ORIGIN);
-        if (sscanf(originString, "%d %d", &scrpriv->win_x,
-            &scrpriv->win_y) != 2) {
+
+        if (sscanf(originString, "%d %d", &pScrn->frameX0,
+            &pScrn->frameY0) != 2) {
             xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
                        "Invalid value for option \"Origin\"\n");
             return FALSE;
         }
+
         xf86DrvMsg(pScrn->scrnIndex, X_INFO, "Using origin x:%d y:%d\n",
-                   scrpriv->win_x, scrpriv->win_y);
+                   pScrn->frameX0, pScrn->frameY0);
     }
 
     xf86ShowUnusedOptions(pScrn->scrnIndex, pScrn->options);
