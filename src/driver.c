@@ -605,8 +605,7 @@ NestedCloseScreen(CLOSE_SCREEN_ARGS_DECL) {
     shadowRemove(pScreen, pScreen->GetScreenPixmap(pScreen));
 
     RemoveBlockAndWakeupHandlers(NestedBlockHandler, NestedWakeupHandler, scrpriv);
-    /* TODO: replace with corresponding Xephyr function.
-    NestedClientCloseScreen(scrpriv); */
+    hostx_close_screen(pScrn);
     pScreen->CloseScreen = scrpriv->CloseScreen;
     return (*pScreen->CloseScreen)(CLOSE_SCREEN_ARGS);
 }
