@@ -345,6 +345,12 @@ static Bool NestedPreInit(ScrnInfoPtr pScrn, int flags) {
         return FALSE;
     }
 
+    if (!hostx_init_window(pScrn)) {
+        xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "Can't create window on display: %s\n",
+                   displayName);
+        return FALSE;
+    }
+
     /* TODO: replace with corresponding Xephyr function.
     if (!NestedClientValidDepth(pScrn->depth)) {
         xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "Invalid depth: %d\n",
@@ -356,7 +362,6 @@ static Bool NestedPreInit(ScrnInfoPtr pScrn, int flags) {
         xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "No valid modes\n");
         return FALSE;
     }
-
 
     if (!pScrn->modes) {
         xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "No valid modes found\n");
