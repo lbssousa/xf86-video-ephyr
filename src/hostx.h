@@ -104,7 +104,6 @@ void *hostx_screen_init(ScrnInfoPtr pScrn,
                         int *bytes_per_line, int *bits_per_pixel);
 void hostx_paint_rect(ScrnInfoPtr pScrn,
                  int sx, int sy, int dx, int dy, int width, int height);
-Bool hostx_load_keymap(KeySymsPtr keySyms, CARD8 *modmap, XkbControlsPtr controls);
 xcb_connection_t *hostx_get_xcbconn(void);
 int hostx_get_screen(void);
 int hostx_get_window(int a_screen_number);
