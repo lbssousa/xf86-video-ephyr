@@ -23,10 +23,10 @@
 
 # Initialize Autoconf
 AC_PREREQ([2.60])
-AC_INIT([xf86-video-nested],
+AC_INIT([xf86-video-ephyr],
         [0.1.0],
         [https://bugs.freedesktop.org/enter_bug.cgi?product=xorg],
-        [xf86-video-nested])
+        [xf86-video-ephyr])
 AC_CONFIG_SRCDIR([Makefile.am])
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_AUX_DIR(.)
@@ -63,7 +63,7 @@ PKG_CHECK_MODULES(X11, x11)
 #PKG_CHECK_MODULES(XEXT, xext)
 PKG_CHECK_MODULES(XCB, xcb xcb-aux xcb-icccm xcb-image xcb-shm xcb-randr)
 
-DRIVER_NAME=nested
+DRIVER_NAME=ephyr
 AC_SUBST([DRIVER_NAME])
 
 AC_CONFIG_FILES([

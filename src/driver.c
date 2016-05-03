@@ -50,13 +50,13 @@
 
 #include "ephyr.h"
 
-#define NESTED_VERSION 0
-#define NESTED_NAME "NESTED"
-#define NESTED_DRIVER_NAME "nested"
+#define EPHYR_VERSION 0
+#define EPHYR_NAME "EPHYR"
+#define EPHYR_DRIVER_NAME "ephyr"
 
-#define NESTED_MAJOR_VERSION PACKAGE_VERSION_MAJOR
-#define NESTED_MINOR_VERSION PACKAGE_VERSION_MINOR
-#define NESTED_PATCHLEVEL PACKAGE_VERSION_PATCHLEVEL
+#define EPHYR_MAJOR_VERSION PACKAGE_VERSION_MAJOR
+#define EPHYR_MINOR_VERSION PACKAGE_VERSION_MINOR
+#define EPHYR_PATCHLEVEL PACKAGE_VERSION_PATCHLEVEL
 
 #define TIMER_CALLBACK_INTERVAL 20
 
@@ -72,15 +72,15 @@ typedef enum {
 } NestedOpts;
 
 typedef enum {
-    NESTED_CHIP
+    EPHYR_CHIP
 } NestedType;
 
-static SymTabRec NestedChipsets[] = {
-    { NESTED_CHIP, "nested" },
-    {-1,            NULL }
+static SymTabRec EphyrChipsets[] = {
+    { EPHYR_CHIP, "ephyr" },
+    {-1,          NULL }
 };
 
-static OptionInfoRec NestedOptions[] = {
+static OptionInfoRec EphyrOptions[] = {
     { OPTION_DISPLAY,    "Display",    OPTV_STRING,  {0}, FALSE },
     { OPTION_XAUTHORITY, "Xauthority", OPTV_STRING,  {0}, FALSE },
     { OPTION_FULLSCREEN, "Fullscreen", OPTV_BOOLEAN, {0}, FALSE },
@@ -88,15 +88,15 @@ static OptionInfoRec NestedOptions[] = {
     { -1,                NULL,         OPTV_NONE,   {0}, FALSE }
 };
 
-static XF86ModuleVersionInfo NestedVersRec = {
-    NESTED_DRIVER_NAME,
+static XF86ModuleVersionInfo EphyrVersRec = {
+    EPHYR_DRIVER_NAME,
     MODULEVENDORSTRING,
     MODINFOSTRING1,
     MODINFOSTRING2,
     XORG_VERSION_CURRENT,
-    NESTED_MAJOR_VERSION,
-    NESTED_MINOR_VERSION,
-    NESTED_PATCHLEVEL,
+    EPHYR_MAJOR_VERSION,
+    EPHYR_MINOR_VERSION,
+    EPHYR_PATCHLEVEL,
     ABI_CLASS_VIDEODRV,
     ABI_VIDEODRV_VERSION,
     MOD_CLASS_VIDEODRV,
@@ -327,23 +327,23 @@ static Bool NestedPreInit(ScrnInfoPtr pScrn, int flags) {
     pScrn->monitor = pScrn->confScreen->monitor; /* XXX */
 
     xf86CollectOptions(pScrn, NULL);
-    xf86ProcessOptions(pScrn->scrnIndex, pScrn->options, NestedOptions);
+    xf86ProcessOptions(pScrn->scrnIndex, pScrn->options, EphyrOptions);
 
-    if (xf86IsOptionSet(NestedOptions, OPTION_DISPLAY)) {
-        displayName = xf86GetOptValString(NestedOptions,
+    if (xf86IsOptionSet(EphyrOptions, OPTION_DISPLAY)) {
+        displayName = xf86GetOptValString(EphyrOptions,
                                           OPTION_DISPLAY);
         setenv("DISPLAY", displayName, TRUE);
         xf86DrvMsg(pScrn->scrnIndex, X_INFO, "Using display \"%s\"\n",
                    displayName);
     }
 
-    if (xf86IsOptionSet(NestedOptions, OPTION_XAUTHORITY)) {
+    if (xf86IsOptionSet(EphyrOptions, OPTION_XAUTHORITY)) {
         setenv("XAUTHORITY",
-               xf86GetOptValString(NestedOptions, OPTION_XAUTHORITY),
+               xf86GetOptValString(EphyrOptions, OPTION_XAUTHORITY),
                TRUE);
     }
 
-    if (xf86GetOptValBool(NestedOptions, OPTION_FULLSCREEN, &fullscreen)) {
+    if (xf86GetOptValBool(EphyrOptions, OPTION_FULLSCREEN, &fullscreen)) {
         if (fullscreen) {
             hostx_use_fullscreen();
         }
@@ -352,8 +352,8 @@ static Bool NestedPreInit(ScrnInfoPtr pScrn, int flags) {
                    fullscreen ? "enabled" : "disabled");
     }
 
-    if (xf86IsOptionSet(NestedOptions, OPTION_OUTPUT)) {
-        scrpriv->output = xf86GetOptValString(NestedOptions,
+    if (xf86IsOptionSet(EphyrOptions, OPTION_OUTPUT)) {
+        scrpriv->output = xf86GetOptValString(EphyrOptions,
                                               OPTION_OUTPUT);
         xf86DrvMsg(pScrn->scrnIndex, X_INFO, "Targeting host X server output \"%s\"\n",
                    scrpriv->output);
@@ -570,8 +570,8 @@ NestedScreenInit(SCREEN_INIT_ARGS_DECL) {
 
 static void
 NestedIdentify(int flags) {
-    xf86PrintChipsets(NESTED_NAME, "Driver for nested servers",
-                      NestedChipsets);
+    xf86PrintChipsets(EPHYR_NAME, "Driver for nested servers",
+                      EphyrChipsets);
 }
 
 static Bool
@@ -588,7 +588,7 @@ NestedProbe(DriverPtr drv, int flags) {
         return FALSE;
     }
 
-    if ((numDevSections = xf86MatchDevice(NESTED_DRIVER_NAME,
+    if ((numDevSections = xf86MatchDevice(EPHYR_DRIVER_NAME,
                                           &devSections)) <= 0) {
         return FALSE;
     }
@@ -596,15 +596,15 @@ NestedProbe(DriverPtr drv, int flags) {
     if (numDevSections > 0) {
         for(i = 0; i < numDevSections; i++) {
             pScrn = NULL;
-            entityIndex = xf86ClaimNoSlot(drv, NESTED_CHIP, devSections[i],
+            entityIndex = xf86ClaimNoSlot(drv, EPHYR_CHIP, devSections[i],
                                           TRUE);
             pScrn = xf86AllocateScreen(drv, 0);
 
             if (pScrn) {
                 xf86AddEntityToScreen(pScrn, entityIndex);
-                pScrn->driverVersion = NESTED_VERSION;
-                pScrn->driverName    = NESTED_DRIVER_NAME;
-                pScrn->name          = NESTED_NAME;
+                pScrn->driverVersion = EPHYR_VERSION;
+                pScrn->driverName    = EPHYR_DRIVER_NAME;
+                pScrn->name          = EPHYR_NAME;
                 pScrn->Probe         = NestedProbe;
                 pScrn->PreInit       = NestedPreInit;
                 pScrn->ScreenInit    = NestedScreenInit;
@@ -624,7 +624,7 @@ NestedProbe(DriverPtr drv, int flags) {
 
 static const OptionInfoRec *
 NestedAvailableOptions(int chipid, int busid) {
-    return NestedOptions;
+    return EphyrOptions;
 }
 
 static Bool
@@ -669,9 +669,9 @@ NestedWakeupHandler(pointer data, int i, pointer LastSelectMask) {
 }
 #endif
 
-_X_EXPORT DriverRec NESTED = {
-    NESTED_VERSION,
-    NESTED_DRIVER_NAME,
+_X_EXPORT DriverRec EPHYR = {
+    EPHYR_VERSION,
+    EPHYR_DRIVER_NAME,
     NestedIdentify,
     NestedProbe,
     NestedAvailableOptions,
@@ -688,7 +688,7 @@ NestedSetup(pointer module, pointer opts, int *errmaj, int *errmin) {
 
     if (!setupDone) {
         setupDone = TRUE;
-        xf86AddDriver(&NESTED, module, HaveDriverFuncs);
+        xf86AddDriver(&EPHYR, module, HaveDriverFuncs);
         return (pointer)1;
     } else {
         if (errmaj) {
@@ -699,8 +699,8 @@ NestedSetup(pointer module, pointer opts, int *errmaj, int *errmin) {
     }
 }
 
-_X_EXPORT XF86ModuleData nestedModuleData = {
-    &NestedVersRec,
+_X_EXPORT XF86ModuleData ephyrModuleData = {
+    &EphyrVersRec,
     NestedSetup,
     NULL, /* teardown */
 };
