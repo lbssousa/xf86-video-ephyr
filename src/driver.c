@@ -164,7 +164,7 @@ NestedAddMode(ScrnInfoPtr pScrn, int width, int height) {
     mode->VDisplay = height;
 
     len = strlen(nameBuf);
-    mode->name = XNFalloc(len+1);
+    mode->name = xnfalloc(len + 1);
     strcpy(mode->name, nameBuf);
 
     xf86DrvMsg(pScrn->scrnIndex, X_INFO, "Adding mode %s\n", mode->name);
