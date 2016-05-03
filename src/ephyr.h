@@ -95,15 +95,15 @@ typedef struct _ephyrScrPriv {
     struct ephyr_glamor *glamor;
 } EphyrScrPriv, *EphyrScrPrivPtr;
 
-extern KdCardFuncs ephyrFuncs;
-
 extern miPointerScreenFuncRec ephyrPointerScreenFuncs;
 
+#if 0
 Bool
  ephyrInitialize(KdCardInfo * card, EphyrPriv * priv);
 
 Bool
  ephyrCardInit(KdCardInfo * card);
+#endif
 
 Bool
 ephyrScreenInitialize(ScrnInfoPtr pScrn);
@@ -117,8 +117,10 @@ Bool
 Bool
  ephyrCreateResources(ScreenPtr pScreen);
 
+#if 0
 void
  ephyrPreserve(KdCardInfo * card);
+#endif
 
 Bool
  ephyrEnable(ScreenPtr pScreen);
@@ -129,8 +131,10 @@ Bool
 void
  ephyrDisable(ScreenPtr pScreen);
 
+#if 0
 void
  ephyrRestore(KdCardInfo * card);
+#endif
 
 void
  ephyrScreenFini(ScrnInfoPtr pScrn);
@@ -138,8 +142,10 @@ void
 void
 ephyrCloseScreen(ScreenPtr pScreen);
 
+#if 0
 void
  ephyrCardFini(KdCardInfo * card);
+#endif
 
 void
  ephyrGetColors(ScreenPtr pScreen, int n, xColorItem * pdefs);
@@ -184,8 +190,6 @@ void
  ephyrShadowUpdate(ScreenPtr pScreen, shadowBufPtr pBuf);
 
 #endif
-
-extern KdOsFuncs EphyrOsFuncs;
 
 extern Bool ephyrCursorInit(ScreenPtr pScreen);
 
