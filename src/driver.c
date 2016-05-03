@@ -67,6 +67,7 @@
 typedef enum {
     OPTION_DISPLAY,
     OPTION_XAUTHORITY,
+    OPTION_FULLSCREEN,
     OPTION_OUTPUT
 } NestedOpts;
 
@@ -80,9 +81,10 @@ static SymTabRec NestedChipsets[] = {
 };
 
 static OptionInfoRec NestedOptions[] = {
-    { OPTION_DISPLAY,    "Display",    OPTV_STRING, {0}, FALSE },
-    { OPTION_XAUTHORITY, "Xauthority", OPTV_STRING, {0}, FALSE },
-    { OPTION_OUTPUT,     "Output",     OPTV_STRING, {0}, FALSE },
+    { OPTION_DISPLAY,    "Display",    OPTV_STRING,  {0}, FALSE },
+    { OPTION_XAUTHORITY, "Xauthority", OPTV_STRING,  {0}, FALSE },
+    { OPTION_FULLSCREEN, "Fullscreen", OPTV_BOOLEAN, {0}, FALSE },
+    { OPTION_OUTPUT,     "Output",     OPTV_STRING,  {0}, FALSE },
     { -1,                NULL,         OPTV_NONE,   {0}, FALSE }
 };
 
@@ -291,6 +293,7 @@ static Bool NestedAllocatePrivate(ScrnInfoPtr pScrn) {
 static Bool NestedPreInit(ScrnInfoPtr pScrn, int flags) {
     const char *displayName = getenv("DISPLAY");
     EphyrScrPrivPtr scrpriv = pScrn->driverPrivate;
+    Bool fullscreen = FALSE;
 
     xf86DrvMsg(pScrn->scrnIndex, X_INFO, "NestedPreInit\n");
 
@@ -338,6 +341,15 @@ static Bool NestedPreInit(ScrnInfoPtr pScrn, int flags) {
         setenv("XAUTHORITY",
                xf86GetOptValString(NestedOptions, OPTION_XAUTHORITY),
                TRUE);
+    }
+
+    if (xf86GetOptValBool(NestedOptions, OPTION_FULLSCREEN, &fullscreen)) {
+        if (fullscreen) {
+            hostx_use_fullscreen();
+        }
+
+        xf86DrvMsg(pScrn->scrnIndex, X_INFO, "Fullscreen mode %s\n",
+                   fullscreen ? "enabled" : "disabled");
     }
 
     if (xf86IsOptionSet(NestedOptions, OPTION_OUTPUT)) {
