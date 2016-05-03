@@ -157,7 +157,7 @@ NestedAddMode(ScrnInfoPtr pScrn, int width, int height) {
         return FALSE;
     }
 
-    mode = XNFcalloc(sizeof(DisplayModeRec));
+    mode = xnfcalloc(1, sizeof(DisplayModeRec));
     mode->status = MODE_OK;
     mode->type = M_T_DRIVER;
     mode->HDisplay = width;
