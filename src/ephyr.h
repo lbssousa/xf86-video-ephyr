@@ -32,7 +32,6 @@
 #include <xcb/xcb_image.h>
 
 #include "os.h"                 /* for OsSignal() */
-#include "kdrive.h"
 #include "hostx.h"
 #include "exa.h"
 
@@ -97,8 +96,6 @@ typedef struct _ephyrScrPriv {
 } EphyrScrPriv, *EphyrScrPrivPtr;
 
 extern KdCardFuncs ephyrFuncs;
-extern KdKeyboardInfo *ephyrKbd;
-extern KdPointerInfo *ephyrMouse;
 
 extern miPointerScreenFuncRec ephyrPointerScreenFuncs;
 
@@ -187,13 +184,6 @@ void
  ephyrShadowUpdate(ScreenPtr pScreen, shadowBufPtr pBuf);
 
 #endif
-
-void
- ephyrUpdateModifierState(unsigned int state);
-
-extern KdPointerDriver EphyrMouseDriver;
-
-extern KdKeyboardDriver EphyrKeyboardDriver;
 
 extern KdOsFuncs EphyrOsFuncs;
 

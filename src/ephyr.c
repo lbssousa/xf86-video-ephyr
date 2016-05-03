@@ -24,11 +24,8 @@
  */
 
 #ifdef HAVE_CONFIG_H
-#include <kdrive-config.h>
+#include "config.h"
 #endif
-
-#include <xcb/xcb_keysyms.h>
-#include <X11/keysym.h>
 
 #include "ephyr.h"
 
@@ -41,21 +38,13 @@
 #endif
 #include "ephyr_glamor_glx.h"
 
-#include "xkbsrv.h"
-
 extern Bool ephyr_glamor;
 
-KdKeyboardInfo *ephyrKbd;
-KdPointerInfo *ephyrMouse;
 Bool ephyrNoDRI = FALSE;
 Bool ephyrNoXV = FALSE;
 
 static int mouseState = 0;
 static Rotation ephyrRandr = RR_Rotate_0;
-
-typedef struct _EphyrInputPrivate {
-    Bool enabled;
-} EphyrKbdPrivate, EphyrPointerPrivate;
 
 Bool EphyrWantGrayScale = 0;
 Bool EphyrWantResize = 0;
@@ -735,64 +724,6 @@ ephyrCloseScreen(ScreenPtr pScreen)
     ephyrUnsetInternalDamage(pScreen);
 }
 
-/*
- * Port of Mark McLoughlin's Xnest fix for focus in + modifier bug.
- * See https://bugs.freedesktop.org/show_bug.cgi?id=3030
- */
-void
-ephyrUpdateModifierState(unsigned int state)
-{
-
-    DeviceIntPtr pDev = inputInfo.keyboard;
-    KeyClassPtr keyc = pDev->key;
-    int i;
-    CARD8 mask;
-    int xkb_state;
-
-    if (!pDev)
-        return;
-
-    xkb_state = XkbStateFieldFromRec(&pDev->key->xkbInfo->state);
-    state = state & 0xff;
-
-    if (xkb_state == state)
-        return;
-
-    for (i = 0, mask = 1; i < 8; i++, mask <<= 1) {
-        int key;
-
-        /* Modifier is down, but shouldn't be
-         */
-        if ((xkb_state & mask) && !(state & mask)) {
-            int count = keyc->modifierKeyCount[i];
-
-            for (key = 0; key < MAP_LENGTH; key++)
-                if (keyc->xkbInfo->desc->map->modmap[key] & mask) {
-                    if (mask == XCB_MOD_MASK_LOCK) {
-                        KdEnqueueKeyboardEvent(ephyrKbd, key, FALSE);
-                        KdEnqueueKeyboardEvent(ephyrKbd, key, TRUE);
-                    }
-                    else if (key_is_down(pDev, key, KEY_PROCESSED))
-                        KdEnqueueKeyboardEvent(ephyrKbd, key, TRUE);
-
-                    if (--count == 0)
-                        break;
-                }
-        }
-
-        /* Modifier shoud be down, but isn't
-         */
-        if (!(xkb_state & mask) && (state & mask))
-            for (key = 0; key < MAP_LENGTH; key++)
-                if (keyc->xkbInfo->desc->map->modmap[key] & mask) {
-                    KdEnqueueKeyboardEvent(ephyrKbd, key, FALSE);
-                    if (mask == XCB_MOD_MASK_LOCK)
-                        KdEnqueueKeyboardEvent(ephyrKbd, key, TRUE);
-                    break;
-                }
-    }
-}
-
 static Bool
 ephyrCursorOffScreen(ScreenPtr *ppScreen, int *x, int *y)
 {
@@ -843,6 +774,7 @@ screen_from_window(Window w)
     return NULL;
 }
 
+#if 0 /* Disable event listening temporarily */
 static void
 ephyrProcessErrorEvent(xcb_generic_event_t *xev)
 {
@@ -879,203 +811,6 @@ ephyrProcessExpose(xcb_generic_event_t *xev)
     } else {
         EPHYR_LOG_ERROR("failed to get host screen\n");
     }
-}
-
-static void
-ephyrProcessMouseMotion(xcb_generic_event_t *xev)
-{
-    xcb_motion_notify_event_t *motion = (xcb_motion_notify_event_t *)xev;
-    ScrnInfoPtr pScrn = screen_from_window(motion->event);
-
-    if (!ephyrMouse ||
-        !((EphyrPointerPrivate *) ephyrMouse->driverPrivate)->enabled) {
-        EPHYR_LOG("skipping mouse motion:%d\n", pScrn->pScreen->myNum);
-        return;
-    }
-
-    if (ephyrCursorScreen != pScrn->pScreen) {
-        EPHYR_LOG("warping mouse cursor. "
-                  "cur_screen:%d, motion_screen:%d\n",
-                  ephyrCursorScreen->myNum, pScrn->pScreen->myNum);
-        ephyrWarpCursor(inputInfo.pointer, pScrn->pScreen,
-                        motion->event_x, motion->event_y);
-    }
-    else {
-        int x = 0, y = 0;
-
-        EPHYR_LOG("enqueuing mouse motion:%d\n", pScrn->pScreen->myNum);
-        x = motion->event_x;
-        y = motion->event_y;
-        EPHYR_LOG("initial (x,y):(%d,%d)\n", x, y);
-
-        /* convert coords into desktop-wide coordinates.
-         * fill_pointer_events will convert that back to
-         * per-screen coordinates where needed */
-        x += pScrn->pScreen->x;
-        y += pScrn->pScreen->y;
-
-        KdEnqueuePointerEvent(ephyrMouse, mouseState | KD_POINTER_DESKTOP, x, y, 0);
-    }
-}
-
-static void
-ephyrProcessButtonPress(xcb_generic_event_t *xev)
-{
-    xcb_button_press_event_t *button = (xcb_button_press_event_t *)xev;
-
-    if (!ephyrMouse ||
-        !((EphyrPointerPrivate *) ephyrMouse->driverPrivate)->enabled) {
-        EPHYR_LOG("skipping mouse press:%d\n", screen_from_window(button->event)->pScreen->myNum);
-        return;
-    }
-
-    ephyrUpdateModifierState(button->state);
-    /* This is a bit hacky. will break for button 5 ( defined as 0x10 )
-     * Check KD_BUTTON defines in kdrive.h
-     */
-    mouseState |= 1 << (button->detail - 1);
-
-    EPHYR_LOG("enqueuing mouse press:%d\n", screen_from_window(button->event)->pScreen->myNum);
-    KdEnqueuePointerEvent(ephyrMouse, mouseState | KD_MOUSE_DELTA, 0, 0, 0);
-}
-
-static void
-ephyrProcessButtonRelease(xcb_generic_event_t *xev)
-{
-    xcb_button_press_event_t *button = (xcb_button_press_event_t *)xev;
-
-    if (!ephyrMouse ||
-        !((EphyrPointerPrivate *) ephyrMouse->driverPrivate)->enabled) {
-        return;
-    }
-
-    ephyrUpdateModifierState(button->state);
-    mouseState &= ~(1 << (button->detail - 1));
-
-    EPHYR_LOG("enqueuing mouse release:%d\n", screen_from_window(button->event)->pScreen->myNum);
-    KdEnqueuePointerEvent(ephyrMouse, mouseState | KD_MOUSE_DELTA, 0, 0, 0);
-}
-
-/* Xephyr wants ctrl+shift to grab the window, but that conflicts with
-   ctrl+alt+shift key combos. Remember the modifier state on key presses and
-   releases, if mod1 is pressed, we need ctrl, shift and mod1 released
-   before we allow a shift-ctrl grab activation.
-
-   note: a key event contains the mask _before_ the current key takes
-   effect, so mod1_was_down will be reset on the first key press after all
-   three were released, not on the last release. That'd require some more
-   effort.
- */
-static int
-ephyrUpdateGrabModifierState(int state)
-{
-    static int mod1_was_down = 0;
-
-    if ((state & (XCB_MOD_MASK_CONTROL|XCB_MOD_MASK_SHIFT|XCB_MOD_MASK_1)) == 0)
-        mod1_was_down = 0;
-    else if (state & XCB_MOD_MASK_1)
-        mod1_was_down = 1;
-
-    return mod1_was_down;
-}
-
-static void
-ephyrProcessKeyPress(xcb_generic_event_t *xev)
-{
-    xcb_key_press_event_t *key = (xcb_key_press_event_t *)xev;
-
-    if (!ephyrKbd ||
-        !((EphyrKbdPrivate *) ephyrKbd->driverPrivate)->enabled) {
-        return;
-    }
-
-    ephyrUpdateGrabModifierState(key->state);
-    ephyrUpdateModifierState(key->state);
-    KdEnqueueKeyboardEvent(ephyrKbd, key->detail, FALSE);
-}
-
-static void
-ephyrProcessKeyRelease(xcb_generic_event_t *xev)
-{
-    xcb_connection_t *conn = hostx_get_xcbconn();
-    xcb_key_release_event_t *key = (xcb_key_release_event_t *)xev;
-    static xcb_key_symbols_t *keysyms;
-    static int grabbed_screen = -1;
-    int mod1_down = ephyrUpdateGrabModifierState(key->state);
-
-    if (!keysyms)
-        keysyms = xcb_key_symbols_alloc(conn);
-
-    if (!EphyrWantNoHostGrab &&
-        (((xcb_key_symbols_get_keysym(keysyms, key->detail, 0) == XK_Shift_L
-          || xcb_key_symbols_get_keysym(keysyms, key->detail, 0) == XK_Shift_R)
-         && (key->state & XCB_MOD_MASK_CONTROL)) ||
-        ((xcb_key_symbols_get_keysym(keysyms, key->detail, 0) == XK_Control_L
-          || xcb_key_symbols_get_keysym(keysyms, key->detail, 0) == XK_Control_R)
-         && (key->state & XCB_MOD_MASK_SHIFT)))) {
-        ScrnInfoPtr pScrn = screen_from_window(key->event);
-        EphyrScrPrivPtr scrpriv = pScrn->driverPrivate;
-
-        if (grabbed_screen != -1) {
-            xcb_ungrab_keyboard(conn, XCB_TIME_CURRENT_TIME);
-            xcb_ungrab_pointer(conn, XCB_TIME_CURRENT_TIME);
-            grabbed_screen = -1;
-            hostx_set_win_title(pScrn,
-                                "(ctrl+shift grabs mouse and keyboard)");
-        }
-        else if (!mod1_down) {
-            /* Attempt grab */
-            xcb_grab_keyboard_cookie_t kbgrabc =
-                xcb_grab_keyboard(conn,
-                                  TRUE,
-                                  scrpriv->win,
-                                  XCB_TIME_CURRENT_TIME,
-                                  XCB_GRAB_MODE_ASYNC,
-                                  XCB_GRAB_MODE_ASYNC);
-            xcb_grab_keyboard_reply_t *kbgrabr;
-            xcb_grab_pointer_cookie_t pgrabc =
-                xcb_grab_pointer(conn,
-                                 TRUE,
-                                 scrpriv->win,
-                                 0,
-                                 XCB_GRAB_MODE_ASYNC,
-                                 XCB_GRAB_MODE_ASYNC,
-                                 scrpriv->win,
-                                 XCB_NONE,
-                                 XCB_TIME_CURRENT_TIME);
-            xcb_grab_pointer_reply_t *pgrabr;
-            kbgrabr = xcb_grab_keyboard_reply(conn, kbgrabc, NULL);
-            if (!kbgrabr || kbgrabr->status != XCB_GRAB_STATUS_SUCCESS) {
-                xcb_discard_reply(conn, pgrabc.sequence);
-                xcb_ungrab_pointer(conn, XCB_TIME_CURRENT_TIME);
-            } else {
-                pgrabr = xcb_grab_pointer_reply(conn, pgrabc, NULL);
-                if (!pgrabr || pgrabr->status != XCB_GRAB_STATUS_SUCCESS)
-                    {
-                        xcb_ungrab_keyboard(conn,
-                                            XCB_TIME_CURRENT_TIME);
-                    } else {
-                    grabbed_screen = scrpriv->mynum;
-                    hostx_set_win_title
-                        (pScrn,
-                         "(ctrl+shift releases mouse and keyboard)");
-                }
-            }
-        }
-    }
-
-    if (!ephyrKbd ||
-        !((EphyrKbdPrivate *) ephyrKbd->driverPrivate)->enabled) {
-        return;
-    }
-
-    /* Still send the release event even if above has happened server
-     * will get confused with just an up event.  Maybe it would be
-     * better to just block shift+ctrls getting to kdrive all
-     * together.
-     */
-    ephyrUpdateModifierState(key->state);
-    KdEnqueueKeyboardEvent(ephyrKbd, key->detail, TRUE);
 }
 
 static void
@@ -1125,26 +860,6 @@ ephyrXcbNotify(int fd, int ready, void *data)
             ephyrProcessExpose(xev);
             break;
 
-        case XCB_MOTION_NOTIFY:
-            ephyrProcessMouseMotion(xev);
-            break;
-
-        case XCB_KEY_PRESS:
-            ephyrProcessKeyPress(xev);
-            break;
-
-        case XCB_KEY_RELEASE:
-            ephyrProcessKeyRelease(xev);
-            break;
-
-        case XCB_BUTTON_PRESS:
-            ephyrProcessButtonPress(xev);
-            break;
-
-        case XCB_BUTTON_RELEASE:
-            ephyrProcessButtonRelease(xev);
-            break;
-
         case XCB_CONFIGURE_NOTIFY:
             ephyrProcessConfigureNotify(xev);
             break;
@@ -1156,6 +871,7 @@ ephyrXcbNotify(int fd, int ready, void *data)
         free(xev);
     }
 }
+#endif
 
 void
 ephyrCardFini(KdCardInfo * card)
@@ -1219,30 +935,7 @@ ephyrPutColors(ScreenPtr pScreen, int n, xColorItem * pdefs)
     }
 }
 
-/* Mouse calls */
-
-static Status
-MouseInit(KdPointerInfo * pi)
-{
-    pi->driverPrivate = (EphyrPointerPrivate *)
-        calloc(sizeof(EphyrPointerPrivate), 1);
-    ((EphyrPointerPrivate *) pi->driverPrivate)->enabled = FALSE;
-    pi->nAxes = 3;
-    pi->nButtons = 32;
-    free(pi->name);
-    pi->name = strdup("Xephyr virtual mouse");
-
-    /*
-     * Must transform pointer coords since the pointer position
-     * relative to the Xephyr window is controlled by the host server and
-     * remains constant regardless of any rotation applied to the Xephyr screen.
-     */
-    pi->transformCoordinates = TRUE;
-
-    ephyrMouse = pi;
-    return Success;
-}
-
+#if 0 /* Disable event listening temporarily */
 static Status
 MouseEnable(KdPointerInfo * pi)
 {
@@ -1258,94 +951,4 @@ MouseDisable(KdPointerInfo * pi)
     RemoveNotifyFd(hostx_get_fd());
     return;
 }
-
-static void
-MouseFini(KdPointerInfo * pi)
-{
-    ephyrMouse = NULL;
-    return;
-}
-
-KdPointerDriver EphyrMouseDriver = {
-    "ephyr",
-    MouseInit,
-    MouseEnable,
-    MouseDisable,
-    MouseFini,
-    NULL,
-};
-
-/* Keyboard */
-
-static Status
-EphyrKeyboardInit(KdKeyboardInfo * ki)
-{
-    KeySymsRec keySyms;
-    CARD8 modmap[MAP_LENGTH];
-    XkbControlsRec controls;
-
-    ki->driverPrivate = (EphyrKbdPrivate *)
-        calloc(sizeof(EphyrKbdPrivate), 1);
-
-    if (hostx_load_keymap(&keySyms, modmap, &controls)) {
-        XkbApplyMappingChange(ki->dixdev, &keySyms,
-                              keySyms.minKeyCode,
-                              keySyms.maxKeyCode - keySyms.minKeyCode + 1,
-                              modmap, serverClient);
-        XkbDDXChangeControls(ki->dixdev, &controls, &controls);
-        free(keySyms.map);
-    }
-
-    ki->minScanCode = keySyms.minKeyCode;
-    ki->maxScanCode = keySyms.maxKeyCode;
-
-    if (ki->name != NULL) {
-        free(ki->name);
-    }
-
-    ki->name = strdup("Xephyr virtual keyboard");
-    ephyrKbd = ki;
-    return Success;
-}
-
-static Status
-EphyrKeyboardEnable(KdKeyboardInfo * ki)
-{
-    ((EphyrKbdPrivate *) ki->driverPrivate)->enabled = TRUE;
-
-    return Success;
-}
-
-static void
-EphyrKeyboardDisable(KdKeyboardInfo * ki)
-{
-    ((EphyrKbdPrivate *) ki->driverPrivate)->enabled = FALSE;
-}
-
-static void
-EphyrKeyboardFini(KdKeyboardInfo * ki)
-{
-    ephyrKbd = NULL;
-    return;
-}
-
-static void
-EphyrKeyboardLeds(KdKeyboardInfo * ki, int leds)
-{
-}
-
-static void
-EphyrKeyboardBell(KdKeyboardInfo * ki, int volume, int frequency, int duration)
-{
-}
-
-KdKeyboardDriver EphyrKeyboardDriver = {
-    "ephyr",
-    EphyrKeyboardInit,
-    EphyrKeyboardEnable,
-    EphyrKeyboardLeds,
-    EphyrKeyboardBell,
-    EphyrKeyboardDisable,
-    EphyrKeyboardFini,
-    NULL,
-};
+#endif

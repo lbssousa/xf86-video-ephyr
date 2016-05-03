@@ -84,8 +84,10 @@ static Bool NestedCreateScreenResources(ScreenPtr pScreen);
 static void NestedShadowUpdate(ScreenPtr pScreen, shadowBufPtr pBuf);
 static Bool NestedCloseScreen(CLOSE_SCREEN_ARGS_DECL);
 
+#if 0 /* Disable event listening temporarily */
 static void NestedBlockHandler(pointer data, OSTimePtr wt, pointer LastSelectMask);
 static void NestedWakeupHandler(pointer data, int i, pointer LastSelectMask);
+#endif
 
 int NestedValidateModes(ScrnInfoPtr pScrn);
 Bool NestedAddMode(ScrnInfoPtr pScrn, int width, int height);
@@ -483,6 +485,7 @@ NestedAddMode(ScrnInfoPtr pScrn, int width, int height) {
     return TRUE;
 }
 
+#if 0 /* Disable event listening temporarily */
 static void
 NestedBlockHandler(pointer data, OSTimePtr wt, pointer LastSelectMask) {
     ephyrPoll();
@@ -491,6 +494,7 @@ NestedBlockHandler(pointer data, OSTimePtr wt, pointer LastSelectMask) {
 static void
 NestedWakeupHandler(pointer data, int i, pointer LastSelectMask) {
 }
+#endif
 
 /* Called at each server generation */
 static Bool NestedScreenInit(SCREEN_INIT_ARGS_DECL)
@@ -549,7 +553,9 @@ static Bool NestedScreenInit(SCREEN_INIT_ARGS_DECL)
     scrpriv->CloseScreen = pScreen->CloseScreen;
     pScreen->CloseScreen = NestedCloseScreen;
 
+#if 0 /* Disable event listening temporarily
     RegisterBlockAndWakeupHandlers(NestedBlockHandler, NestedWakeupHandler, scrpriv);
+#endif
 
     return TRUE;
 }
@@ -588,7 +594,10 @@ NestedCloseScreen(CLOSE_SCREEN_ARGS_DECL) {
 
     shadowRemove(pScreen, pScreen->GetScreenPixmap(pScreen));
 
+#if 0 /* Disable event listening temporarily
     RemoveBlockAndWakeupHandlers(NestedBlockHandler, NestedWakeupHandler, scrpriv);
+#endif
+
     hostx_close_screen(pScrn);
     pScreen->CloseScreen = scrpriv->CloseScreen;
     return (*pScreen->CloseScreen)(CLOSE_SCREEN_ARGS);
