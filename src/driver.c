@@ -151,7 +151,6 @@ Bool
 NestedAddMode(ScrnInfoPtr pScrn, int width, int height) {
     DisplayModePtr mode;
     char nameBuf[64];
-    size_t len;
 
     if (snprintf(nameBuf, 64, "%dx%d", width, height) >= 64) {
         return FALSE;
@@ -162,10 +161,7 @@ NestedAddMode(ScrnInfoPtr pScrn, int width, int height) {
     mode->type = M_T_DRIVER;
     mode->HDisplay = width;
     mode->VDisplay = height;
-
-    len = strlen(nameBuf);
-    mode->name = xnfalloc(len + 1);
-    strcpy(mode->name, nameBuf);
+    mode->name = strdup(nameBuf);
 
     xf86DrvMsg(pScrn->scrnIndex, X_INFO, "Adding mode %s\n", mode->name);
 
