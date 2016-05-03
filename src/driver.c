@@ -66,7 +66,8 @@
 
 typedef enum {
     OPTION_DISPLAY,
-    OPTION_XAUTHORITY
+    OPTION_XAUTHORITY,
+    OPTION_OUTPUT
 } NestedOpts;
 
 typedef enum {
@@ -81,6 +82,7 @@ static SymTabRec NestedChipsets[] = {
 static OptionInfoRec NestedOptions[] = {
     { OPTION_DISPLAY,    "Display",    OPTV_STRING, {0}, FALSE },
     { OPTION_XAUTHORITY, "Xauthority", OPTV_STRING, {0}, FALSE },
+    { OPTION_OUTPUT,     "Output",     OPTV_STRING, {0}, FALSE },
     { -1,                NULL,         OPTV_NONE,   {0}, FALSE }
 };
 
@@ -288,6 +290,7 @@ static Bool NestedAllocatePrivate(ScrnInfoPtr pScrn) {
 /* Data from here is valid to all server generations */
 static Bool NestedPreInit(ScrnInfoPtr pScrn, int flags) {
     const char *displayName = getenv("DISPLAY");
+    EphyrScrPrivPtr scrpriv = pScrn->driverPrivate;
 
     xf86DrvMsg(pScrn->scrnIndex, X_INFO, "NestedPreInit\n");
 
@@ -335,6 +338,13 @@ static Bool NestedPreInit(ScrnInfoPtr pScrn, int flags) {
         setenv("XAUTHORITY",
                xf86GetOptValString(NestedOptions, OPTION_XAUTHORITY),
                TRUE);
+    }
+
+    if (xf86IsOptionSet(NestedOptions, OPTION_OUTPUT)) {
+        scrpriv->output = xf86GetOptValString(NestedOptions,
+                                              OPTION_OUTPUT);
+        xf86DrvMsg(pScrn->scrnIndex, X_INFO, "Targeting host X server output \"%s\"\n",
+                   scrpriv->output);
     }
 
     xf86ShowUnusedOptions(pScrn->scrnIndex, pScrn->options);

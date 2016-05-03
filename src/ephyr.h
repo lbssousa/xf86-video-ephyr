@@ -76,7 +76,7 @@ typedef struct _ephyrScrPriv {
     int win_x, win_y;
     int win_width, win_height;
     int server_depth;
-    const char *output;         /* Set via -output option */
+    const char *output;         /* Set via "Output" xorg.conf option */
     unsigned char *fb_data;     /* only used when host bpp != server bpp */
     xcb_shm_segment_info_t shminfo;
 
