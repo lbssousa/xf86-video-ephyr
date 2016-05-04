@@ -29,4 +29,4 @@ ephyr_drv_la_LDFLAGS = -module -avoid-version
 ephyr_drv_la_LIBADD = $(XORG_LIBS) $(X11_LIBS) $(XEXT_LIBS)
 ephyr_drv_ladir = @moduledir@/drivers
 
-ephyr_drv_la_SOURCES = driver.c compat-api.h
+ephyr_drv_la_SOURCES = driver.c compat-api.h ephyr.h ephyr.c hostx.h hostx.c
