@@ -43,6 +43,7 @@
 #include <sys/time.h>
 
 #include <X11/keysym.h>
+#include <xf86.h>
 #include <xcb/xcb.h>
 #include <xcb/xproto.h>
 #include <xcb/xcb_icccm.h>
@@ -52,7 +53,6 @@
 #include <xcb/shape.h>
 #include <xcb/xcb_keysyms.h>
 #include <xcb/randr.h>
-#include <xcb/xkb.h>
 #ifdef GLAMOR
 #include <epoxy/gl.h>
 #include "glamor.h"
@@ -112,7 +112,7 @@ static void
 int
 hostx_want_screen_geometry(ScrnInfoPtr pScrn, int *width, int *height, int *x, int *y)
 {
-    EphyrScrPrivPtr scrpriv = pScrn->driver;
+    EphyrScrPrivPtr scrpriv = pScrn->driverPrivate;
 
     if (scrpriv && (scrpriv->win_pre_existing != None ||
                     scrpriv->output != NULL ||
@@ -131,7 +131,7 @@ hostx_want_screen_geometry(ScrnInfoPtr pScrn, int *width, int *height, int *x, i
 void
 hostx_add_screen(ScrnInfoPtr pScrn, unsigned long win_id, int screen_num, Bool use_geometry, const char *output)
 {
-    EphyrScrPrivPtr scrpriv = pScrn->driver;
+    EphyrScrPrivPtr scrpriv = pScrn->driverPrivate;
     int index = HostX.n_screens;
 
     HostX.n_screens += 1;
@@ -372,7 +372,7 @@ hostx_set_fullscreen_hint(void)
     free(reply);
 
     for (index = 0; index < HostX.n_screens; index++) {
-        EphyrScrPrivPtr scrpriv = HostX.screens[index]->driver;
+        EphyrScrPrivPtr scrpriv = HostX.screens[index]->driverPrivate;
         xcb_change_property(HostX.conn,
                             PropModeReplace,
                             scrpriv->win,
@@ -418,30 +418,16 @@ hostx_set_title(char *title)
 Bool
 hostx_init(void)
 {
-    uint32_t attrs[2];
-    uint32_t attr_mask = 0;
     xcb_pixmap_t cursor_pxm;
     xcb_gcontext_t cursor_gc;
     uint16_t red, green, blue;
     uint32_t pixel;
     int index;
-    char *tmpstr;
-    char *class_hint;
-    size_t class_len;
     xcb_screen_t *xscreen;
     xcb_rectangle_t rect = { 0, 0, 1, 1 };
 
-    attrs[0] =
-        XCB_EVENT_MASK_BUTTON_PRESS
-        | XCB_EVENT_MASK_BUTTON_RELEASE
-        | XCB_EVENT_MASK_POINTER_MOTION
-        | XCB_EVENT_MASK_KEY_PRESS
-        | XCB_EVENT_MASK_KEY_RELEASE
-        | XCB_EVENT_MASK_EXPOSURE
-        | XCB_EVENT_MASK_STRUCTURE_NOTIFY;
-    attr_mask |= XCB_CW_EVENT_MASK;
-
     EPHYR_DBG("mark");
+
 #ifdef GLAMOR
     if (ephyr_glamor) {
         HostX.conn = ephyr_glamor_connect();
@@ -460,23 +446,14 @@ hostx_init(void)
     HostX.winroot = xscreen->root;
     HostX.gc = xcb_generate_id(HostX.conn);
     HostX.depth = xscreen->root_depth;
+
 #ifdef GLAMOR
     if (ephyr_glamor) {
         HostX.visual = ephyr_glamor_get_visual();
-
-        if (HostX.visual->visual_id != xscreen->root_visual) {
-            attrs[1] = xcb_generate_id(HostX.conn);
-            attr_mask |= XCB_CW_COLORMAP;
-            xcb_create_colormap(HostX.conn,
-                                XCB_COLORMAP_ALLOC_NONE,
-                                attrs[1],
-                                HostX.winroot,
-                                HostX.visual->visual_id);
-        }
     } else
 #endif
     {
-        HostX.visual = xcb_aux_find_visual_by_id(xscreen,xscreen->root_visual);
+        HostX.visual = xcb_aux_find_visual_by_id(xscreen, xscreen->root_visual);
     }
 
     xcb_create_gc(HostX.conn, HostX.gc, HostX.winroot, 0, NULL);
@@ -581,13 +558,34 @@ hostx_init(void)
 
 Bool
 hostx_init_window(ScrnInfoPtr pScrn) {
+    uint32_t attrs[2];
+    uint32_t attr_mask = 0;
+    xcb_screen_t *xscreen;
+    char *tmpstr;
+    char *class_hint;
+    size_t class_len;
     EphyrScrPrivPtr scrpriv = pScrn->driverPrivate;
 
+    attrs[0] = XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_STRUCTURE_NOTIFY;
+    attr_mask |= XCB_CW_EVENT_MASK;
+    xscreen = xcb_aux_get_screen(HostX.conn, HostX.screen);
     scrpriv->win = xcb_generate_id(HostX.conn);
     scrpriv->server_depth = HostX.depth;
     scrpriv->ximg = NULL;
     scrpriv->win_x = 0;
     scrpriv->win_y = 0;
+
+#ifdef GLAMOR
+    if (HostX.visual->visual_id != xscreen->root_visual) {
+        attrs[1] = xcb_generate_id(HostX.conn);
+        attr_mask |= XCB_CW_COLORMAP;
+        xcb_create_colormap(HostX.conn,
+                            XCB_COLORMAP_ALLOC_NONE,
+                            attrs[1],
+                            HostX.winroot,
+                            HostX.visual->visual_id);
+    }
+#endif
 
     if (scrpriv->win_pre_existing != XCB_WINDOW_NONE) {
         xcb_get_geometry_reply_t *prewin_geom;
@@ -685,7 +683,7 @@ hostx_init_window(ScrnInfoPtr pScrn) {
                                      &HostX.empty_cursor);
     }
 
-    return TRUE
+    return TRUE;
 }
 
 int
@@ -762,8 +760,8 @@ void
 hostx_set_cmap_entry(ScreenPtr pScreen, unsigned char idx,
                      unsigned char r, unsigned char g, unsigned char b)
 {
-    ScrnInfoPtr pScrn = xf86ScreenTopScrn(pScreen);
-    EphyrScrPrivPtr scrpriv = pScrn->driver;
+    ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
+    EphyrScrPrivPtr scrpriv = pScrn->driverPrivate;
 /* need to calculate the shifts for RGB because server could be BGR. */
 /* XXX Not sure if this is correct for 8 on 16, but this works for 8 on 24.*/
     static int rshift, bshift, gshift = 0;
@@ -1117,7 +1115,7 @@ hostx_get_window(int a_screen_number)
         EPHYR_LOG_ERROR("bad screen number:%d\n", a_screen_number);
         return 0;
     }
-    scrpriv = HostX.screens[a_screen_number]->driver;
+    scrpriv = HostX.screens[a_screen_number]->driverPrivate;
     return scrpriv->win;
 }
 
@@ -1211,7 +1209,7 @@ hostx_create_window(int a_screen_number,
     xcb_screen_t *screen = xcb_aux_get_screen(HostX.conn, hostx_get_screen());
     xcb_visualtype_t *visual;
     int depth = 0;
-    EphyrScrPrivPtr scrpriv = HostX.screens[a_screen_number]->driver;
+    EphyrScrPrivPtr scrpriv = HostX.screens[a_screen_number]->driverPrivate;
 
     EPHYR_RETURN_VAL_IF_FAIL(screen && a_geometry, FALSE);
 
