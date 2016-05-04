@@ -29,6 +29,11 @@
 #include <unistd.h>
 #include <signal.h>
 #include <libgen.h>
+
+#include <xorg-server.h>
+#include <xf86str.h>
+#include <shadow.h>
+#include <mipointer.h>
 #include <xcb/xcb_image.h>
 
 #include "os.h"                 /* for OsSignal() */
@@ -105,8 +110,10 @@ Bool
  ephyrCardInit(KdCardInfo * card);
 #endif
 
+#if 0
 Bool
 ephyrScreenInitialize(ScrnInfoPtr pScrn);
+#endif
 
 Bool
  ephyrInitScreen(ScreenPtr pScreen);
@@ -114,10 +121,10 @@ Bool
 Bool
  ephyrFinishInitScreen(ScreenPtr pScreen);
 
+#if 0
 Bool
  ephyrCreateResources(ScreenPtr pScreen);
 
-#if 0
 void
  ephyrPreserve(KdCardInfo * card);
 #endif
@@ -153,6 +160,7 @@ void
 void
  ephyrPutColors(ScreenPtr pScreen, int n, xColorItem * pdefs);
 
+#if 0
 Bool
  ephyrMapFramebuffer(ScrnInfoPtr pScrn);
 
@@ -165,6 +173,7 @@ void
 
 Bool
  ephyrUnmapFramebuffer(ScrnInfoPtr pScrn);
+#endif
 
 void
  ephyrUnsetInternalDamage(ScreenPtr pScreen);
@@ -175,6 +184,7 @@ Bool
 Bool
  ephyrCreateColormap(ColormapPtr pmap);
 
+#if 0
 #ifdef RANDR
 Bool
  ephyrRandRGetInfo(ScreenPtr pScreen, Rotation * rotations);
@@ -189,6 +199,7 @@ Bool
 void
  ephyrShadowUpdate(ScreenPtr pScreen, shadowBufPtr pBuf);
 
+#endif
 #endif
 
 extern Bool ephyrCursorInit(ScreenPtr pScreen);

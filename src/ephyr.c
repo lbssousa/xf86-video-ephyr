@@ -50,6 +50,7 @@ Bool EphyrWantGrayScale = 0;
 Bool EphyrWantResize = 0;
 Bool EphyrWantNoHostGrab = 0;
 
+#if 0
 Bool
 ephyrInitialize(KdCardInfo * card, EphyrPriv * priv)
 {
@@ -77,7 +78,9 @@ ephyrCardInit(KdCardInfo * card)
 
     return TRUE;
 }
+#endif
 
+#if 0
 Bool
 ephyrScreenInitialize(ScrnInfoPtr pScrn)
 {
@@ -87,9 +90,9 @@ ephyrScreenInitialize(ScrnInfoPtr pScrn)
     CARD32 redMask, greenMask, blueMask;
 
     if (hostx_want_screen_geometry(pScrn, &width, &height, &x, &y)
-        || !pScrn->width || !pScrn->height) {
-        pScrn->width = width;
-        pScrn->height = height;
+        || !pScrn->virtualX || !pScrn->virtualY) {
+        pScrn->virtualX = width;
+        pScrn->virtualY = height;
         pScrn->x = x;
         pScrn->y = y;
     }
@@ -163,7 +166,9 @@ ephyrScreenInitialize(ScrnInfoPtr pScrn)
 
     return ephyrMapFramebuffer(pScrn);
 }
+#endif
 
+#if 0
 void *
 ephyrWindowLinear(ScreenPtr pScreen,
                   CARD32 row,
@@ -177,6 +182,7 @@ ephyrWindowLinear(ScreenPtr pScreen,
     *size = priv->bytes_per_line;
     return priv->base + row * priv->bytes_per_line + offset;
 }
+#endif
 
 /**
  * Figure out display buffer size. If fakexa is enabled, allocate a larger
@@ -189,13 +195,14 @@ ephyrBufferHeight(ScrnInfoPtr pScrn)
 
     /* TODO: replace kdrive's initAccel() with some xfree86 eqiuvalent (e.g. EXA)
     if (ephyrFuncs.initAccel == NULL)
-        buffer_height = pScrn->height;
+        buffer_height = pScrn->virtualY;
     else
-        buffer_height = 3 * pScrn->height; */
-    buffer_height = pScrn->height;
+        buffer_height = 3 * pScrn->virtualY; */
+    buffer_height = pScrn->virtualY;
     return buffer_height;
 }
 
+#if 0
 Bool
 ephyrMapFramebuffer(ScrnInfoPtr pScrn)
 {
@@ -204,28 +211,28 @@ ephyrMapFramebuffer(ScrnInfoPtr pScrn)
     KdPointerMatrix m;
     int buffer_height;
 
-    EPHYR_LOG("pScrn->width: %d, pScrn->height: %d index=%d",
-              pScrn->width, pScrn->height, pScrn->mynum);
+    EPHYR_LOG("pScrn->virtualX: %d, pScrn->virtualY: %d index=%d",
+              pScrn->virtualX, pScrn->virtualY, pScrn->mynum);
 
     /*
      * Use the rotation last applied to ourselves (in the Xephyr case the fb
      * coordinate system moves independently of the pointer coordiante system).
      */
-    KdComputePointerMatrix(&m, ephyrRandr, pScrn->width, pScrn->height);
+    KdComputePointerMatrix(&m, ephyrRandr, pScrn->virtualX, pScrn->virtualY);
     KdSetPointerMatrix(&m);
 
     buffer_height = ephyrBufferHeight(pScrn);
 
     priv->base =
         hostx_screen_init(pScrn, pScrn->x, pScrn->y,
-                          pScrn->width, pScrn->height, buffer_height,
+                          pScrn->virtualX, pScrn->virtualY, buffer_height,
                           &priv->bytes_per_line, &pScrn->fb.bitsPerPixel);
 
     if ((scrpriv->randr & RR_Rotate_0) && !(scrpriv->randr & RR_Reflect_All)) {
         scrpriv->shadow = FALSE;
 
         pScrn->fb.byteStride = priv->bytes_per_line;
-        pScrn->fb.pixelStride = pScrn->width;
+        pScrn->fb.pixelStride = pScrn->virtualX;
         pScrn->fb.frameBuffer = (CARD8 *) (priv->base);
     }
     else {
@@ -240,7 +247,9 @@ ephyrMapFramebuffer(ScrnInfoPtr pScrn)
 
     return TRUE;
 }
+#endif
 
+#if 0
 void
 ephyrSetScreenSizes(ScreenPtr pScreen)
 {
@@ -248,16 +257,16 @@ ephyrSetScreenSizes(ScreenPtr pScreen)
     EphyrScrPrivPtr scrpriv = pScrn->driverPrivate;
 
     if (scrpriv->randr & (RR_Rotate_0 | RR_Rotate_180)) {
-        pScreen->width = pScrn->width;
-        pScreen->height = pScrn->height;
-        pScreen->mmWidth = pScrn->width_mm;
-        pScreen->mmHeight = pScrn->height_mm;
+        pScreen->width = pScrn->virtualX;
+        pScreen->height = pScrn->virtualY;
+        pScreen->mmWidth = pScrn->virtualX_mm;
+        pScreen->mmHeight = pScrn->virtualY_mm;
     }
     else {
-        pScreen->width = pScrn->height;
-        pScreen->height = pScrn->width;
-        pScreen->mmWidth = pScrn->height_mm;
-        pScreen->mmHeight = pScrn->width_mm;
+        pScreen->width = pScrn->virtualY;
+        pScreen->height = pScrn->virtualX;
+        pScreen->mmWidth = pScrn->virtualY_mm;
+        pScreen->mmHeight = pScrn->virtualX_mm;
     }
 }
 
@@ -273,6 +282,7 @@ ephyrUnmapFramebuffer(ScrnInfoPtr pScrn)
 
     return TRUE;
 }
+#endif
 
 void
 ephyrShadowUpdate(ScreenPtr pScreen, shadowBufPtr pBuf)
@@ -286,7 +296,7 @@ ephyrShadowUpdate(ScreenPtr pScreen, shadowBufPtr pBuf)
      * pBuf->pDamage  regions
      */
     shadowUpdateRotatePacked(pScreen, pBuf);
-    hostx_paint_rect(pScrn, 0, 0, 0, 0, pScrn->width, pScrn->height);
+    hostx_paint_rect(pScrn, 0, 0, 0, 0, pScrn->virtualX, pScrn->virtualY);
 }
 
 static void
@@ -373,6 +383,7 @@ ephyrUnsetInternalDamage(ScreenPtr pScreen)
                                  (void *) pScreen);
 }
 
+#if 0
 #ifdef RANDR
 Bool
 ephyrRandRGetInfo(ScreenPtr pScreen, Rotation * rotations)
@@ -414,16 +425,16 @@ ephyrRandRGetInfo(ScreenPtr pScreen, Rotation * rotations)
             RRRegisterSize(pScreen,
                            sizes[n].width,
                            sizes[n].height,
-                           (sizes[n].width * pScrn->width_mm) / pScrn->width,
-                           (sizes[n].height * pScrn->height_mm) /
-                           pScrn->height);
+                           (sizes[n].width * pScrn->virtualX_mm) / pScrn->virtualX,
+                           (sizes[n].height * pScrn->virtualY_mm) /
+                           pScrn->virtualY);
             n++;
         }
     }
 
     pSize = RRRegisterSize(pScreen,
-                           pScrn->width,
-                           pScrn->height, pScrn->width_mm, pScrn->height_mm);
+                           pScrn->virtualX,
+                           pScrn->virtualY, pScrn->virtualX_mm, pScrn->virtualY_mm);
 
     randr = KdSubRotation(scrpriv->randr, pScrn->randr);
 
@@ -432,6 +443,7 @@ ephyrRandRGetInfo(ScreenPtr pScreen, Rotation * rotations)
     return TRUE;
 }
 
+#if 0
 Bool
 ephyrRandRSetConfig(ScreenPtr pScreen,
                     Rotation randr, int rate, RRScreenSizePtr pSize)
@@ -458,8 +470,8 @@ ephyrRandRSetConfig(ScreenPtr pScreen,
 
     oldscr = *scrpriv;
 
-    oldwidth = pScrn->width;
-    oldheight = pScrn->height;
+    oldwidth = pScrn->virtualX;
+    oldheight = pScrn->virtualY;
     oldmmwidth = pScreen->mmWidth;
     oldmmheight = pScreen->mmHeight;
     oldshadow = scrpriv->shadow;
@@ -480,8 +492,8 @@ ephyrRandRSetConfig(ScreenPtr pScreen,
 
     ephyrUnmapFramebuffer(pScrn);
 
-    pScrn->width = newwidth;
-    pScrn->height = newheight;
+    pScrn->virtualX = newwidth;
+    pScrn->virtualY = newheight;
 
     if (!ephyrMapFramebuffer(pScrn))
         goto bail4;
@@ -547,6 +559,7 @@ ephyrRandRSetConfig(ScreenPtr pScreen,
         KdEnableScreen(pScreen);
     return FALSE;
 }
+#endif
 
 Bool
 ephyrRandRInit(ScreenPtr pScreen)
@@ -578,7 +591,7 @@ ephyrResizeScreen (ScreenPtr           pScreen,
         newheight = t;
     }
 
-    if (newwidth == pScrn->width && newheight == pScrn->height) {
+    if (newwidth == pScrn->virtualX && newheight == pScrn->virtualY) {
         return FALSE;
     }
 
@@ -597,6 +610,7 @@ ephyrResizeScreen (ScreenPtr           pScreen,
 
     return ret;
 }
+#endif
 #endif
 
 Bool
@@ -659,6 +673,7 @@ ephyrFinishInitScreen(ScreenPtr pScreen)
  * make any pixmaps after the screen and all extensions have been
  * initialized.
  */
+#if 0
 Bool
 ephyrCreateResources(ScreenPtr pScreen)
 {
@@ -680,11 +695,14 @@ ephyrCreateResources(ScreenPtr pScreen)
         return ephyrSetInternalDamage(pScreen);
     }
 }
+#endif
 
+#if 0
 void
 ephyrPreserve(KdCardInfo * card)
 {
 }
+#endif
 
 Bool
 ephyrEnable(ScreenPtr pScreen)
@@ -703,10 +721,12 @@ ephyrDisable(ScreenPtr pScreen)
 {
 }
 
+#if 0
 void
 ephyrRestore(KdCardInfo * card)
 {
 }
+#endif
 
 void
 ephyrScreenFini(ScrnInfoPtr pScrn)
@@ -753,6 +773,7 @@ miPointerScreenFuncRec ephyrPointerScreenFuncs = {
     ephyrWarpCursor,
 };
 
+#if 0
 static KdScreenInfo *
 screen_from_window(Window w)
 {
@@ -773,6 +794,7 @@ screen_from_window(Window w)
 
     return NULL;
 }
+#endif
 
 #if 0 /* Disable event listening temporarily */
 static void
@@ -873,6 +895,7 @@ ephyrXcbNotify(int fd, int ready, void *data)
 }
 #endif
 
+#if 0
 void
 ephyrCardFini(KdCardInfo * card)
 {
@@ -880,6 +903,7 @@ ephyrCardFini(KdCardInfo * card)
 
     free(priv);
 }
+#endif
 
 void
 ephyrGetColors(ScreenPtr pScreen, int n, xColorItem * pdefs)

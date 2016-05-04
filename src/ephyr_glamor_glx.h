@@ -29,7 +29,7 @@
  */
 
 #include <xcb/xcb.h>
-#include "dix-config.h"
+#include "config.h"
 
 struct ephyr_glamor;
 struct pixman_region16;
