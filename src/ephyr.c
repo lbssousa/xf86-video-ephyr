@@ -999,57 +999,65 @@ MouseDisable(KdPointerInfo * pi)
  * Beginning of driver.c */
 
 typedef enum {
-   OPTION_DISPLAY,
-   OPTION_XAUTHORITY,
-   OPTION_PARENTWINDOW,
-   OPTION_FULLSCREEN,
-   OPTION_OUTPUT
+    OPTION_DISPLAY,
+    OPTION_XAUTHORITY,
+#ifdef GLAMOR
+    OPTION_NOACCEL,
+    OPTION_ACCELMETHOD,
+#endif
+    OPTION_PARENTWINDOW,
+    OPTION_FULLSCREEN,
+    OPTION_OUTPUT,
 } ephyrOpts;
 
 typedef enum {
-   EPHYR_CHIP
+    EPHYR_CHIP
 } ephyrType;
 
 static SymTabRec EphyrChipsets[] = {
-   { EPHYR_CHIP, "ephyr" },
-   {-1,          NULL }
+    { EPHYR_CHIP, "ephyr" },
+    {-1,          NULL }
 };
 
 static OptionInfoRec EphyrOptions[] = {
-   { OPTION_DISPLAY,      "Display",      OPTV_STRING,  {0}, FALSE },
-   { OPTION_XAUTHORITY,   "Xauthority",   OPTV_STRING,  {0}, FALSE },
-   { OPTION_PARENTWINDOW, "ParentWindow", OPTV_INTEGER, {0}, FALSE },
-   { OPTION_FULLSCREEN,   "Fullscreen",   OPTV_BOOLEAN, {0}, FALSE },
-   { OPTION_OUTPUT,       "Output",       OPTV_STRING,  {0}, FALSE },
-   { -1,                  NULL,           OPTV_NONE,    {0}, FALSE }
+    { OPTION_DISPLAY,      "Display",      OPTV_STRING,  {0}, FALSE },
+    { OPTION_XAUTHORITY,   "Xauthority",   OPTV_STRING,  {0}, FALSE },
+#ifdef GLAMOR
+    { OPTION_NOACCEL,      "NoAccel",      OPTV_BOOLEAN, {0}, FALSE },
+    { OPTION_ACCELMETHOD,  "AccelMethod",  OPTV_STRING,  {0}, FALSE },
+#endif
+    { OPTION_PARENTWINDOW, "ParentWindow", OPTV_INTEGER, {0}, FALSE },
+    { OPTION_FULLSCREEN,   "Fullscreen",   OPTV_BOOLEAN, {0}, FALSE },
+    { OPTION_OUTPUT,       "Output",       OPTV_STRING,  {0}, FALSE },
+    { -1,                  NULL,           OPTV_NONE,    {0}, FALSE }
 };
 
 static XF86ModuleVersionInfo EphyrVersRec = {
-   EPHYR_DRIVER_NAME,
-   MODULEVENDORSTRING,
-   MODINFOSTRING1,
-   MODINFOSTRING2,
-   XORG_VERSION_CURRENT,
-   EPHYR_MAJOR_VERSION,
-   EPHYR_MINOR_VERSION,
-   EPHYR_PATCHLEVEL,
-   ABI_CLASS_VIDEODRV,
-   ABI_VIDEODRV_VERSION,
-   MOD_CLASS_VIDEODRV,
-   {0, 0, 0, 0} /* checksum */
+    EPHYR_DRIVER_NAME,
+    MODULEVENDORSTRING,
+    MODINFOSTRING1,
+    MODINFOSTRING2,
+    XORG_VERSION_CURRENT,
+    EPHYR_MAJOR_VERSION,
+    EPHYR_MINOR_VERSION,
+    EPHYR_PATCHLEVEL,
+    ABI_CLASS_VIDEODRV,
+    ABI_VIDEODRV_VERSION,
+    MOD_CLASS_VIDEODRV,
+    {0, 0, 0, 0} /* checksum */
 };
 
 static Bool
 ephyrEnterVT(VT_FUNC_ARGS_DECL) {
-   SCRN_INFO_PTR(arg);
-   xf86DrvMsg(pScrn->scrnIndex, X_INFO, "ephyrEnterVT\n");
-   return TRUE;
+    SCRN_INFO_PTR(arg);
+    xf86DrvMsg(pScrn->scrnIndex, X_INFO, "ephyrEnterVT\n");
+    return TRUE;
 }
 
 static void
 ephyrLeaveVT(VT_FUNC_ARGS_DECL) {
-   SCRN_INFO_PTR(arg);
-   xf86DrvMsg(pScrn->scrnIndex, X_INFO, "ephyrLeaveVT\n");
+    SCRN_INFO_PTR(arg);
+    xf86DrvMsg(pScrn->scrnIndex, X_INFO, "ephyrLeaveVT\n");
 }
 
 static Bool
@@ -1230,8 +1238,10 @@ ephyrAllocatePrivate(ScrnInfoPtr pScrn) {
 static Bool
 ephyrPreInit(ScrnInfoPtr pScrn, int flags) {
    const char *displayName = getenv("DISPLAY");
+   const char *accelMethod;
    EphyrScrPrivPtr scrpriv = pScrn->driverPrivate;
    Bool fullscreen = FALSE;
+   Bool noAccel = FALSE;
 
    xf86DrvMsg(pScrn->scrnIndex, X_INFO, "ephyrPreInit\n");
 
@@ -1281,6 +1291,29 @@ ephyrPreInit(ScrnInfoPtr pScrn, int flags) {
                                   OPTION_XAUTHORITY),
               TRUE);
    }
+
+#ifdef GLAMOR
+   if (xf86IsOptionSet(EphyrOptions, OPTION_ACCELMETHOD)) {
+      accelMethod = xf86GetOptValString(EphyrOptions,
+                                        OPTION_ACCELMETHOD);
+      xf86GetOptValBool(EphyrOptions,
+                        OPTION_NOACCEL,
+                        &noAccel);
+
+      if (!noAccel) {
+          if (!xf86nameCompare(accelMethod, "glamor")) {
+            ephyr_glamor = TRUE;
+          } else if (!xf86nameCompare(accelMethod, "glamor_gles2")) {
+            ephyr_glamor = TRUE;
+            ephyr_glamor_gles2 = TRUE;
+          }
+
+          if (ephyr_glamor) {
+              xf86DrvMsg(pScrn->scrnIndex, X_INFO, "GLAMOR support enabled.");
+          }
+      }
+   }
+#endif
 
    if (xf86GetOptValInteger(EphyrOptions,
                             OPTION_PARENTWINDOW,
