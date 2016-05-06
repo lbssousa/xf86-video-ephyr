@@ -146,9 +146,6 @@ void
 void
  ephyrScreenFini(ScrnInfoPtr pScrn);
 
-void
-ephyrCloseScreen(ScreenPtr pScreen);
-
 #if 0
 void
  ephyrCardFini(KdCardInfo * card);
@@ -195,9 +192,6 @@ ephyrRandRSetConfig(ScreenPtr pScreen,
                     Rotation randr, int rate, RRScreenSizePtr pSize);
 Bool
  ephyrRandRInit(ScreenPtr pScreen);
-
-void
- ephyrShadowUpdate(ScreenPtr pScreen, shadowBufPtr pBuf);
 
 #endif
 #endif

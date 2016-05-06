@@ -319,21 +319,6 @@ ephyrUnmapFramebuffer(ScrnInfoPtr pScrn)
 }
 #endif
 
-void
-ephyrShadowUpdate(ScreenPtr pScreen, shadowBufPtr pBuf)
-{
-    ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
-
-    EPHYR_LOG("slow paint");
-
-    /* FIXME: Slow Rotated/Reflected updates could be much
-     * much faster efficiently updating via tranforming
-     * pBuf->pDamage  regions
-     */
-    shadowUpdateRotatePacked(pScreen, pBuf);
-    hostx_paint_rect(pScrn, 0, 0, 0, 0, pScrn->virtualX, pScrn->virtualY);
-}
-
 static void
 ephyrInternalDamageRedisplay(ScreenPtr pScreen)
 {
@@ -776,12 +761,6 @@ ephyrScreenFini(ScrnInfoPtr pScrn)
 }
 #endif
 
-void
-ephyrCloseScreen(ScreenPtr pScreen)
-{
-    ephyrUnsetInternalDamage(pScreen);
-}
-
 static Bool
 ephyrCursorOffScreen(ScreenPtr *ppScreen, int *x, int *y)
 {
@@ -1024,11 +1003,11 @@ typedef enum {
    OPTION_XAUTHORITY,
    OPTION_FULLSCREEN,
    OPTION_OUTPUT
-} NestedOpts;
+} ephyrOpts;
 
 typedef enum {
    EPHYR_CHIP
-} NestedType;
+} ephyrType;
 
 static SymTabRec EphyrChipsets[] = {
    { EPHYR_CHIP, "ephyr" },
@@ -1059,36 +1038,36 @@ static XF86ModuleVersionInfo EphyrVersRec = {
 };
 
 static Bool
-NestedEnterVT(VT_FUNC_ARGS_DECL) {
+ephyrEnterVT(VT_FUNC_ARGS_DECL) {
    SCRN_INFO_PTR(arg);
-   xf86DrvMsg(pScrn->scrnIndex, X_INFO, "NestedEnterVT\n");
+   xf86DrvMsg(pScrn->scrnIndex, X_INFO, "ephyrEnterVT\n");
    return TRUE;
 }
 
 static void
-NestedLeaveVT(VT_FUNC_ARGS_DECL) {
+ephyrLeaveVT(VT_FUNC_ARGS_DECL) {
    SCRN_INFO_PTR(arg);
-   xf86DrvMsg(pScrn->scrnIndex, X_INFO, "NestedLeaveVT\n");
+   xf86DrvMsg(pScrn->scrnIndex, X_INFO, "ephyrLeaveVT\n");
 }
 
 static Bool
-NestedSwitchMode(SWITCH_MODE_ARGS_DECL) {
+ephyrSwitchMode(SWITCH_MODE_ARGS_DECL) {
    SCRN_INFO_PTR(arg);
-   xf86DrvMsg(pScrn->scrnIndex, X_INFO, "NestedSwitchMode\n");
+   xf86DrvMsg(pScrn->scrnIndex, X_INFO, "ephyrSwitchMode\n");
    return TRUE;
 }
 
 static void
-NestedAdjustFrame(ADJUST_FRAME_ARGS_DECL) {
+ephyrAdjustFrame(ADJUST_FRAME_ARGS_DECL) {
    SCRN_INFO_PTR(arg);
-   xf86DrvMsg(pScrn->scrnIndex, X_INFO, "NestedAdjustFrame\n");
+   xf86DrvMsg(pScrn->scrnIndex, X_INFO, "ephyrAdjustFrame\n");
 }
 
 static ModeStatus
-NestedValidMode(SCRN_ARG_TYPE arg, DisplayModePtr mode,
+ephyrValidMode(SCRN_ARG_TYPE arg, DisplayModePtr mode,
                Bool verbose, int flags) {
    SCRN_INFO_PTR(arg);
-   xf86DrvMsg(pScrn->scrnIndex, X_INFO, "NestedValidMode:\n");
+   xf86DrvMsg(pScrn->scrnIndex, X_INFO, "ephyrValidMode:\n");
 
    if (!mode) {
        xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "NULL MODE!\n");
@@ -1101,13 +1080,13 @@ NestedValidMode(SCRN_ARG_TYPE arg, DisplayModePtr mode,
 }
 
 static void
-NestedFreeScreen(FREE_SCREEN_ARGS_DECL) {
+ephyrFreeScreen(FREE_SCREEN_ARGS_DECL) {
    SCRN_INFO_PTR(arg);
-   xf86DrvMsg(pScrn->scrnIndex, X_INFO, "NestedFreeScreen\n");
+   xf86DrvMsg(pScrn->scrnIndex, X_INFO, "ephyrFreeScreen\n");
 }
 
 Bool
-NestedAddMode(ScrnInfoPtr pScrn, int width, int height) {
+ephyrAddMode(ScrnInfoPtr pScrn, int width, int height) {
    DisplayModePtr mode;
    char nameBuf[64];
 
@@ -1140,7 +1119,7 @@ NestedAddMode(ScrnInfoPtr pScrn, int width, int height) {
 }
 
 int
-NestedValidateModes(ScrnInfoPtr pScrn) {
+ephyrValidateModes(ScrnInfoPtr pScrn) {
    DisplayModePtr mode;
    int i, width, height, ret = 0;
    int maxX = 0, maxY = 0;
@@ -1170,12 +1149,12 @@ NestedValidateModes(ScrnInfoPtr pScrn) {
                return 0;
            }
 
-           if (!NestedAddMode(pScrn, width, height)) {
+           if (!ephyrAddMode(pScrn, width, height)) {
                return 0;
            }
        }
    } else {
-       if (!NestedAddMode(pScrn, 640, 480)) {
+       if (!ephyrAddMode(pScrn, 640, 480)) {
            return 0;
        }
    }
@@ -1228,9 +1207,9 @@ NestedValidateModes(ScrnInfoPtr pScrn) {
    return ret;
 }
 
-static Bool NestedAllocatePrivate(ScrnInfoPtr pScrn) {
+static Bool ephyrAllocatePrivate(ScrnInfoPtr pScrn) {
    if (pScrn->driverPrivate != NULL) {
-       xf86Msg(X_WARNING, "NestedAllocatePrivate called for an already "
+       xf86Msg(X_WARNING, "ephyrAllocatePrivate called for an already "
                "allocated private!\n");
        return FALSE;
    }
@@ -1245,18 +1224,18 @@ static Bool NestedAllocatePrivate(ScrnInfoPtr pScrn) {
 }
 
 /* Data from here is valid to all server generations */
-static Bool NestedPreInit(ScrnInfoPtr pScrn, int flags) {
+static Bool ephyrPreInit(ScrnInfoPtr pScrn, int flags) {
    const char *displayName = getenv("DISPLAY");
    EphyrScrPrivPtr scrpriv = pScrn->driverPrivate;
    Bool fullscreen = FALSE;
 
-   xf86DrvMsg(pScrn->scrnIndex, X_INFO, "NestedPreInit\n");
+   xf86DrvMsg(pScrn->scrnIndex, X_INFO, "ephyrPreInit\n");
 
    if (flags & PROBE_DETECT) {
        return FALSE;
    }
 
-   if (!NestedAllocatePrivate(pScrn)) {
+   if (!ephyrAllocatePrivate(pScrn)) {
        xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "Failed to allocate private\n");
        return FALSE;
    }
@@ -1332,13 +1311,13 @@ static Bool NestedPreInit(ScrnInfoPtr pScrn, int flags) {
    }
 
    /* TODO: replace with corresponding Xephyr function.
-   if (!NestedClientValidDepth(pScrn->depth)) {
+   if (!ephyrClientValidDepth(pScrn->depth)) {
        xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "Invalid depth: %d\n",
                   pScrn->depth);
        return FALSE;
    }*/
 
-   if (NestedValidateModes(pScrn) < 1) {
+   if (ephyrValidateModes(pScrn) < 1) {
        xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "No valid modes\n");
        return FALSE;
    }
@@ -1369,30 +1348,40 @@ static Bool NestedPreInit(ScrnInfoPtr pScrn, int flags) {
 }
 
 static void
-NestedShadowUpdate(ScreenPtr pScreen, shadowBufPtr pBuf) {
-   ephyrShadowUpdate(pScreen, pBuf);
+ephyrShadowUpdate(ScreenPtr pScreen, shadowBufPtr pBuf)
+{
+    ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
+
+    EPHYR_LOG("slow paint");
+
+    /* FIXME: Slow Rotated/Reflected updates could be much
+     * much faster efficiently updating via tranforming
+     * pBuf->pDamage  regions
+     */
+    shadowUpdateRotatePacked(pScreen, pBuf);
+    hostx_paint_rect(pScrn, 0, 0, 0, 0, pScrn->virtualX, pScrn->virtualY);
 }
 
 static Bool
-NestedSaveScreen(ScreenPtr pScreen, int mode) {
-   xf86DrvMsg(pScreen->myNum, X_INFO, "NestedSaveScreen\n");
+ephyrSaveScreen(ScreenPtr pScreen, int mode) {
+   xf86DrvMsg(pScreen->myNum, X_INFO, "ephyrSaveScreen\n");
    return TRUE;
 }
 
 static Bool
-NestedCreateScreenResources(ScreenPtr pScreen) {
-   xf86DrvMsg(pScreen->myNum, X_INFO, "NestedCreateScreenResources\n");
+ephyrCreateScreenResources(ScreenPtr pScreen) {
+   xf86DrvMsg(pScreen->myNum, X_INFO, "ephyrCreateScreenResources\n");
    ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
    EphyrScrPrivPtr scrpriv = pScrn->driverPrivate;
    Bool ret;
 
    pScreen->CreateScreenResources = scrpriv->CreateScreenResources;
    ret = pScreen->CreateScreenResources(pScreen);
-   pScreen->CreateScreenResources = NestedCreateScreenResources;
+   pScreen->CreateScreenResources = ephyrCreateScreenResources;
 
    if(!shadowAdd(pScreen, pScreen->GetScreenPixmap(pScreen),
                  scrpriv->update, NULL, 0, 0)) {
-       xf86DrvMsg(pScreen->myNum, X_ERROR, "NestedCreateScreenResources failed to shadowAdd.\n");
+       xf86DrvMsg(pScreen->myNum, X_ERROR, "ephyrCreateScreenResources failed to shadowAdd.\n");
        return FALSE;
    }
 
@@ -1400,7 +1389,7 @@ NestedCreateScreenResources(ScreenPtr pScreen) {
 }
 
 void
-NestedPrintMode(ScrnInfoPtr p, DisplayModePtr m) {
+ephyrPrintMode(ScrnInfoPtr p, DisplayModePtr m) {
    xf86DrvMsg(p->scrnIndex, X_INFO, "HDisplay   %d\n",   m->HDisplay);
    xf86DrvMsg(p->scrnIndex, X_INFO, "HSyncStart %d\n", m->HSyncStart);
    xf86DrvMsg(p->scrnIndex, X_INFO, "HSyncEnd   %d\n",   m->HSyncEnd);
@@ -1414,7 +1403,7 @@ NestedPrintMode(ScrnInfoPtr p, DisplayModePtr m) {
 }
 
 void
-NestedPrintPscreen(ScrnInfoPtr p) {
+ephyrPrintPscreen(ScrnInfoPtr p) {
    /* XXX: finish implementing this someday? */
    xf86DrvMsg(p->scrnIndex, X_INFO, "Printing pScrn:\n");
    xf86DrvMsg(p->scrnIndex, X_INFO, "driverVersion: %d\n", p->driverVersion);
@@ -1433,22 +1422,30 @@ NestedPrintPscreen(ScrnInfoPtr p) {
    xf86DrvMsg(p->scrnIndex, X_INFO, "bitsPerPixel: %d\n", p->bitsPerPixel);
    /*xf86DrvMsg(p->scrnIndex, X_INFO, "pixmap24: 0x%x\n"); */
    xf86DrvMsg(p->scrnIndex, X_INFO, "depth: %d\n", p->depth);
-   NestedPrintMode(p, p->currentMode);
+   ephyrPrintMode(p, p->currentMode);
    /*xf86DrvMsg(p->scrnIndex, X_INFO, "depthFrom: %\n");
    xf86DrvMsg(p->scrnIndex, X_INFO, "\n");*/
 }
 
+/* From former ephyr.c
+void
+ephyrCloseScreen(ScreenPtr pScreen)
+{
+    ephyrUnsetInternalDamage(pScreen);
+}
+*/
+
 static Bool
-NestedCloseScreen(CLOSE_SCREEN_ARGS_DECL) {
+ephyrCloseScreen(CLOSE_SCREEN_ARGS_DECL) {
    ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
    EphyrScrPrivPtr scrpriv = pScrn->driverPrivate;
 
-   xf86DrvMsg(pScrn->scrnIndex, X_INFO, "NestedCloseScreen\n");
+   xf86DrvMsg(pScrn->scrnIndex, X_INFO, "ephyrCloseScreen\n");
 
    shadowRemove(pScreen, pScreen->GetScreenPixmap(pScreen));
 
 #if 0 /* Disable event listening temporarily */
-   RemoveBlockAndWakeupHandlers(NestedBlockHandler, NestedWakeupHandler, scrpriv);
+   RemoveBlockAndWakeupHandlers(ephyrBlockHandler, ephyrWakeupHandler, scrpriv);
 #endif
 
    hostx_close_screen(pScrn);
@@ -1458,14 +1455,14 @@ NestedCloseScreen(CLOSE_SCREEN_ARGS_DECL) {
 
 /* Called at each server generation */
 static Bool
-NestedScreenInit(SCREEN_INIT_ARGS_DECL) {
+ephyrScreenInit(SCREEN_INIT_ARGS_DECL) {
    ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
    EphyrScrPrivPtr scrpriv = pScrn->driverPrivate;
    Pixel redMask, greenMask, blueMask;
    char *fb_data;
 
-   xf86DrvMsg(pScrn->scrnIndex, X_INFO, "NestedScreenInit\n");
-   NestedPrintPscreen(pScrn);
+   xf86DrvMsg(pScrn->scrnIndex, X_INFO, "ephyrScreenInit\n");
+   ephyrPrintPscreen(pScrn);
 
    fb_data = hostx_screen_init(pScrn,
                                pScrn->frameX0, pScrn->frameY0,
@@ -1503,34 +1500,34 @@ NestedScreenInit(SCREEN_INIT_ARGS_DECL) {
        return FALSE;
    }
 
-   scrpriv->update = NestedShadowUpdate;
-   pScreen->SaveScreen = NestedSaveScreen;
+   scrpriv->update = ephyrShadowUpdate;
+   pScreen->SaveScreen = ephyrSaveScreen;
 
    if (!shadowSetup(pScreen)) {
        return FALSE;
    }
 
    scrpriv->CreateScreenResources = pScreen->CreateScreenResources;
-   pScreen->CreateScreenResources = NestedCreateScreenResources;
+   pScreen->CreateScreenResources = ephyrCreateScreenResources;
 
    scrpriv->CloseScreen = pScreen->CloseScreen;
-   pScreen->CloseScreen = NestedCloseScreen;
+   pScreen->CloseScreen = ephyrCloseScreen;
 
 #if 0 /* Disable event listening temporarily */
-   RegisterBlockAndWakeupHandlers(NestedBlockHandler, NestedWakeupHandler, scrpriv);
+   RegisterBlockAndWakeupHandlers(ephyrBlockHandler, ephyrWakeupHandler, scrpriv);
 #endif
 
    return TRUE;
 }
 
 static void
-NestedIdentify(int flags) {
+ephyrIdentify(int flags) {
    xf86PrintChipsets(EPHYR_NAME, "Driver for nested servers",
                      EphyrChipsets);
 }
 
 static Bool
-NestedProbe(DriverPtr drv, int flags) {
+ephyrProbe(DriverPtr drv, int flags) {
    Bool foundScreen = FALSE;
    int numDevSections;
    GDevPtr *devSections;
@@ -1560,15 +1557,15 @@ NestedProbe(DriverPtr drv, int flags) {
                pScrn->driverVersion = EPHYR_VERSION;
                pScrn->driverName    = EPHYR_DRIVER_NAME;
                pScrn->name          = EPHYR_NAME;
-               pScrn->Probe         = NestedProbe;
-               pScrn->PreInit       = NestedPreInit;
-               pScrn->ScreenInit    = NestedScreenInit;
-               pScrn->SwitchMode    = NestedSwitchMode;
-               pScrn->AdjustFrame   = NestedAdjustFrame;
-               pScrn->EnterVT       = NestedEnterVT;
-               pScrn->LeaveVT       = NestedLeaveVT;
-               pScrn->FreeScreen    = NestedFreeScreen;
-               pScrn->ValidMode     = NestedValidMode;
+               pScrn->Probe         = ephyrProbe;
+               pScrn->PreInit       = ephyrPreInit;
+               pScrn->ScreenInit    = ephyrScreenInit;
+               pScrn->SwitchMode    = ephyrSwitchMode;
+               pScrn->AdjustFrame   = ephyrAdjustFrame;
+               pScrn->EnterVT       = ephyrEnterVT;
+               pScrn->LeaveVT       = ephyrLeaveVT;
+               pScrn->FreeScreen    = ephyrFreeScreen;
+               pScrn->ValidMode     = ephyrValidMode;
                foundScreen = TRUE;
            }
        }
@@ -1578,14 +1575,14 @@ NestedProbe(DriverPtr drv, int flags) {
 }
 
 static const OptionInfoRec *
-NestedAvailableOptions(int chipid, int busid) {
+ephyrAvailableOptions(int chipid, int busid) {
    return EphyrOptions;
 }
 
 static Bool
-NestedDriverFunc(ScrnInfoPtr pScrn, xorgDriverFuncOp op, pointer ptr) {
+ephyrDriverFunc(ScrnInfoPtr pScrn, xorgDriverFuncOp op, pointer ptr) {
    CARD32 *flag;
-   xf86Msg(X_INFO, "NestedDriverFunc\n");
+   xf86Msg(X_INFO, "ephyrDriverFunc\n");
 
    /* XXX implement */
    switch(op) {
@@ -1602,10 +1599,10 @@ NestedDriverFunc(ScrnInfoPtr pScrn, xorgDriverFuncOp op, pointer ptr) {
    }
 }
 
-static void NestedFreePrivate(ScrnInfoPtr pScrn) {
+static void ephyrFreePrivate(ScrnInfoPtr pScrn) {
    if (pScrn->driverPrivate == NULL) {
        xf86DrvMsg(pScrn->scrnIndex, X_WARNING,
-                  "Double freeing NestedPrivate!\n");
+                  "Double freeing ephyrPrivate!\n");
        return;
    }
 
@@ -1615,30 +1612,30 @@ static void NestedFreePrivate(ScrnInfoPtr pScrn) {
 
 #if 0 /* Disable event listening temporarily */
 static void
-NestedBlockHandler(pointer data, OSTimePtr wt, pointer LastSelectMask) {
+ephyrBlockHandler(pointer data, OSTimePtr wt, pointer LastSelectMask) {
    ephyrPoll();
 }
 
 static void
-NestedWakeupHandler(pointer data, int i, pointer LastSelectMask) {
+ephyrWakeupHandler(pointer data, int i, pointer LastSelectMask) {
 }
 #endif
 
 _X_EXPORT DriverRec EPHYR = {
    EPHYR_VERSION,
    EPHYR_DRIVER_NAME,
-   NestedIdentify,
-   NestedProbe,
-   NestedAvailableOptions,
+   ephyrIdentify,
+   ephyrProbe,
+   ephyrAvailableOptions,
    NULL, /* module */
    0,    /* refCount */
-   NestedDriverFunc,
+   ephyrDriverFunc,
    NULL, /* DeviceMatch */
    0     /* PciProbe */
 };
 
 static pointer
-NestedSetup(pointer module, pointer opts, int *errmaj, int *errmin) {
+ephyrSetup(pointer module, pointer opts, int *errmaj, int *errmin) {
    static Bool setupDone = FALSE;
 
    if (!setupDone) {
@@ -1656,6 +1653,6 @@ NestedSetup(pointer module, pointer opts, int *errmaj, int *errmin) {
 
 _X_EXPORT XF86ModuleData ephyrModuleData = {
    &EphyrVersRec,
-   NestedSetup,
+   ephyrSetup,
    NULL, /* teardown */
 };
