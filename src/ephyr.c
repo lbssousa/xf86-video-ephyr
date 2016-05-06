@@ -53,6 +53,7 @@
 #include <xf86.h>
 #include <xf86Module.h>
 #include <xf86str.h>
+#include <xf86Optrec.h>
 
 #include "compat-api.h"
 
@@ -73,7 +74,7 @@
 /* End of driver.c includes
  ******************************************************
  * Beginning of former ephyr.c */
-extern Bool ephyr_glamor;
+extern Bool ephyr_glamor, ephyr_glamor_gles2;
 
 Bool ephyrNoDRI = FALSE;
 Bool ephyrNoXV = FALSE;
