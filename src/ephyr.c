@@ -1001,6 +1001,7 @@ MouseDisable(KdPointerInfo * pi)
 typedef enum {
    OPTION_DISPLAY,
    OPTION_XAUTHORITY,
+   OPTION_PARENTWINDOW,
    OPTION_FULLSCREEN,
    OPTION_OUTPUT
 } ephyrOpts;
@@ -1015,11 +1016,12 @@ static SymTabRec EphyrChipsets[] = {
 };
 
 static OptionInfoRec EphyrOptions[] = {
-   { OPTION_DISPLAY,    "Display",    OPTV_STRING,  {0}, FALSE },
-   { OPTION_XAUTHORITY, "Xauthority", OPTV_STRING,  {0}, FALSE },
-   { OPTION_FULLSCREEN, "Fullscreen", OPTV_BOOLEAN, {0}, FALSE },
-   { OPTION_OUTPUT,     "Output",     OPTV_STRING,  {0}, FALSE },
-   { -1,                NULL,         OPTV_NONE,    {0}, FALSE }
+   { OPTION_DISPLAY,      "Display",      OPTV_STRING,  {0}, FALSE },
+   { OPTION_XAUTHORITY,   "Xauthority",   OPTV_STRING,  {0}, FALSE },
+   { OPTION_PARENTWINDOW, "ParentWindow", OPTV_INTEGER, {0}, FALSE },
+   { OPTION_FULLSCREEN,   "Fullscreen",   OPTV_BOOLEAN, {0}, FALSE },
+   { OPTION_OUTPUT,       "Output",       OPTV_STRING,  {0}, FALSE },
+   { -1,                  NULL,           OPTV_NONE,    {0}, FALSE }
 };
 
 static XF86ModuleVersionInfo EphyrVersRec = {
@@ -1275,11 +1277,21 @@ ephyrPreInit(ScrnInfoPtr pScrn, int flags) {
 
    if (xf86IsOptionSet(EphyrOptions, OPTION_XAUTHORITY)) {
        setenv("XAUTHORITY",
-              xf86GetOptValString(EphyrOptions, OPTION_XAUTHORITY),
+              xf86GetOptValString(EphyrOptions,
+                                  OPTION_XAUTHORITY),
               TRUE);
    }
 
-   if (xf86GetOptValBool(EphyrOptions, OPTION_FULLSCREEN, &fullscreen)) {
+   if (xf86GetOptValInteger(EphyrOptions,
+                            OPTION_PARENTWINDOW,
+                            &scrpriv->win_pre_existing)) {
+       xf86DrvMsg(pScrn->scrnIndex, X_INFO, "Targeting parent window \"%x\"\n",
+                  scrpriv->win_pre_existing);
+   }
+
+   if (xf86GetOptValBool(EphyrOptions,
+                         OPTION_FULLSCREEN,
+                         &fullscreen)) {
        if (fullscreen) {
            hostx_use_fullscreen();
        }

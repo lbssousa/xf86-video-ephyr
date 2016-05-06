@@ -74,7 +74,7 @@ typedef struct _ephyrScrPriv {
 
     /* Host X window info */
     xcb_window_t win;
-    xcb_window_t win_pre_existing;    /* Set via -parent option like xnest */
+    xcb_window_t win_pre_existing;    /* Set via "ParentWindow" xorg.conf option */
     xcb_window_t peer_win;            /* Used for GL; should be at most one */
     xcb_image_t *ximg;
     Bool win_explicit_position;
