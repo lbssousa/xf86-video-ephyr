@@ -51,6 +51,15 @@ AC_ARG_WITH(xorg-module-dir, [  --with-xorg-module-dir=DIR ],
                              [ moduledir="$libdir/xorg/modules" ])
 AC_SUBST(moduledir)
 
+# Define a configure option for building with GLAMOR support
+AC_ARG_ENABLE(glamor, AS_HELP_STRING([--enable-glamor],
+                                     [Build with GLAMOR support (default: no)]),
+                      [GLAMOR=$enableval], [GLAMOR=no])
+AM_CONDITIONAL([GLAMOR], [test "x$GLAMOR" = xyes])
+if test "x$GLAMOR" = xyes; then
+    AC_DEFINE(GLAMOR, 1, [Build glamor])
+    PKG_CHECK_MODULES([GLAMOR], [epoxy])
+fi
 
 # Store the list of server defined optional extensions in REQUIRED_MODULES
 #XORG_DRIVER_CHECK_EXT(RANDR, randrproto)

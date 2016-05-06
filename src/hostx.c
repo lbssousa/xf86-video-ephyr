@@ -1336,16 +1336,15 @@ out:
 
 #ifdef GLAMOR
 Bool
-ephyr_glamor_init(ScreenPtr screen)
-{
-    ScrnInfoPtr pScrn = xf86ScreenTopScrn(pScreen);
+ephyr_glamor_init(ScreenPtr pScreen) {
+    ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
     EphyrScrPrivPtr scrpriv = pScrn->driverPrivate;
 
     scrpriv->glamor = ephyr_glamor_glx_screen_init(scrpriv->win);
     ephyr_glamor_set_window_size(scrpriv->glamor,
                                  scrpriv->win_width, scrpriv->win_height);
 
-    if (!glamor_init(screen, 0)) {
+    if (!glamor_init(pScreen, 0)) {
         FatalError("Failed to initialize glamor\n");
         return FALSE;
     }
@@ -1354,8 +1353,7 @@ ephyr_glamor_init(ScreenPtr screen)
 }
 
 Bool
-ephyr_glamor_create_screen_resources(ScreenPtr pScreen)
-{
+ephyr_glamor_create_screen_resources(ScreenPtr pScreen) {
     ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
     EphyrScrPrivPtr scrpriv = pScrn->driverPrivate;
     PixmapPtr screen_pixmap;
@@ -1394,22 +1392,19 @@ ephyr_glamor_create_screen_resources(ScreenPtr pScreen)
 }
 
 void
-ephyr_glamor_enable(ScreenPtr screen)
-{
+ephyr_glamor_enable(ScreenPtr pScreen) {
 }
 
 void
-ephyr_glamor_disable(ScreenPtr screen)
-{
+ephyr_glamor_disable(ScreenPtr pScreen) {
 }
 
 void
-ephyr_glamor_fini(ScreenPtr screen)
-{
+ephyr_glamor_fini(ScreenPtr pScreen) {
     ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
     EphyrScrPrivPtr scrpriv = pScrn->driverPrivate;
 
-    glamor_fini(screen);
+    glamor_fini(pScreen);
     ephyr_glamor_glx_screen_fini(scrpriv->glamor);
     scrpriv->glamor = NULL;
 }
