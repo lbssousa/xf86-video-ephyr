@@ -1085,7 +1085,7 @@ ephyrFreeScreen(FREE_SCREEN_ARGS_DECL) {
    xf86DrvMsg(pScrn->scrnIndex, X_INFO, "ephyrFreeScreen\n");
 }
 
-Bool
+static Bool
 ephyrAddMode(ScrnInfoPtr pScrn, int width, int height) {
    DisplayModePtr mode;
    char nameBuf[64];
@@ -1118,7 +1118,7 @@ ephyrAddMode(ScrnInfoPtr pScrn, int width, int height) {
    return TRUE;
 }
 
-int
+static int
 ephyrValidateModes(ScrnInfoPtr pScrn) {
    DisplayModePtr mode;
    int i, width, height, ret = 0;
@@ -1207,7 +1207,8 @@ ephyrValidateModes(ScrnInfoPtr pScrn) {
    return ret;
 }
 
-static Bool ephyrAllocatePrivate(ScrnInfoPtr pScrn) {
+static Bool
+ephyrAllocatePrivate(ScrnInfoPtr pScrn) {
    if (pScrn->driverPrivate != NULL) {
        xf86Msg(X_WARNING, "ephyrAllocatePrivate called for an already "
                "allocated private!\n");
@@ -1224,7 +1225,8 @@ static Bool ephyrAllocatePrivate(ScrnInfoPtr pScrn) {
 }
 
 /* Data from here is valid to all server generations */
-static Bool ephyrPreInit(ScrnInfoPtr pScrn, int flags) {
+static Bool
+ephyrPreInit(ScrnInfoPtr pScrn, int flags) {
    const char *displayName = getenv("DISPLAY");
    EphyrScrPrivPtr scrpriv = pScrn->driverPrivate;
    Bool fullscreen = FALSE;
@@ -1388,7 +1390,7 @@ ephyrCreateScreenResources(ScreenPtr pScreen) {
    return ret;
 }
 
-void
+static void
 ephyrPrintMode(ScrnInfoPtr p, DisplayModePtr m) {
    xf86DrvMsg(p->scrnIndex, X_INFO, "HDisplay   %d\n",   m->HDisplay);
    xf86DrvMsg(p->scrnIndex, X_INFO, "HSyncStart %d\n", m->HSyncStart);
@@ -1402,7 +1404,7 @@ ephyrPrintMode(ScrnInfoPtr p, DisplayModePtr m) {
    xf86DrvMsg(p->scrnIndex, X_INFO, "VScan      %d\n",      m->VScan);
 }
 
-void
+static void
 ephyrPrintPscreen(ScrnInfoPtr p) {
    /* XXX: finish implementing this someday? */
    xf86DrvMsg(p->scrnIndex, X_INFO, "Printing pScrn:\n");
@@ -1599,7 +1601,8 @@ ephyrDriverFunc(ScrnInfoPtr pScrn, xorgDriverFuncOp op, pointer ptr) {
    }
 }
 
-static void ephyrFreePrivate(ScrnInfoPtr pScrn) {
+static void
+ephyrFreePrivate(ScrnInfoPtr pScrn) {
    if (pScrn->driverPrivate == NULL) {
        xf86DrvMsg(pScrn->scrnIndex, X_WARNING,
                   "Double freeing ephyrPrivate!\n");
