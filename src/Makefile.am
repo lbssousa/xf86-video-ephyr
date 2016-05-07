@@ -22,11 +22,11 @@
 #         Laércio de Sousa <laerciosousa@sme-mogidascruzes.sp.gov.br>
 #
 
-AM_CFLAGS = $(XORG_CFLAGS) $(PCIACCESS_CFLAGS) $(X11_CFLAGS) $(XEXT_CFLAGS)
+AM_CFLAGS = $(XORG_CFLAGS) $(PCIACCESS_CFLAGS) $(X11_CFLAGS) $(XEXT_CFLAGS) $(XCB_GFLAGS)
 
 ephyr_drv_la_LTLIBRARIES = ephyr_drv.la
 ephyr_drv_la_LDFLAGS = -module -avoid-version
-ephyr_drv_la_LIBADD = $(XORG_LIBS) $(X11_LIBS) $(XEXT_LIBS)
+ephyr_drv_la_LIBADD = $(XORG_LIBS) $(X11_LIBS) $(XEXT_LIBS) $(XCB_LIBS)
 ephyr_drv_ladir = @moduledir@/drivers
 
 ephyr_drv_la_SOURCES = compat-api.h ephyr.h ephyr.c hostx.h hostx.c
