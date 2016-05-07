@@ -922,7 +922,6 @@ hostx_screen_init(ScrnInfoPtr pScrn,
         xcb_configure_window(HostX.conn, scrpriv->win, mask, values);
     }
 
-
     xcb_aux_sync(HostX.conn);
 
     scrpriv->win_width = width;
@@ -939,19 +938,29 @@ hostx_screen_init(ScrnInfoPtr pScrn,
         return NULL;
     } else
 #endif
+
     if (host_depth_matches_server(scrpriv)) {
-        *bytes_per_line = scrpriv->ximg->stride;
-        *bits_per_pixel = scrpriv->ximg->bpp;
+        if (bytes_per_line != NULL) {
+            *bytes_per_line = scrpriv->ximg->stride;
+        }
+
+        if (bits_per_pixel != NULL) {
+            *bits_per_pixel = scrpriv->ximg->bpp;
+        }
 
         EPHYR_DBG("Host matches server");
         return scrpriv->ximg->data;
-    }
-    else {
+    } else {
         int bytes_per_pixel = scrpriv->server_depth >> 3;
         int stride = (width * bytes_per_pixel + 0x3) & ~0x3;
 
-        *bytes_per_line = stride;
-        *bits_per_pixel = scrpriv->server_depth;
+        if (bytes_per_line != NULL) {
+            *bytes_per_line = stride;
+        }
+
+        if (bits_per_pixel != NULL) {
+            *bits_per_pixel = scrpriv->server_depth;
+        }
 
         EPHYR_DBG("server bpp %i", bytes_per_pixel);
         scrpriv->fb_data = xallocarray (stride, buffer_height);
