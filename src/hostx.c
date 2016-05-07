@@ -508,9 +508,9 @@ hostx_init(void)
                       1,1);
     xcb_free_pixmap(HostX.conn, cursor_pxm);
 
-    if (!hostx_want_host_cursor ()) {
+    /*if (!hostx_want_host_cursor ()) {
         CursorVisible = TRUE;
-    }
+    }*/
 
     /* Try to get share memory ximages for a little bit more speed */
     if (!hostx_has_extension(&xcb_shm_id) || getenv("XEPHYR_NO_SHM")) {
