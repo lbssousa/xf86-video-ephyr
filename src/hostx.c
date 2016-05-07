@@ -44,6 +44,7 @@
 
 #include <X11/keysym.h>
 #include <xf86.h>
+#include <xf86Priv.h>
 #include <xcb/xcb.h>
 #include <xcb/xproto.h>
 #include <xcb/xcb_icccm.h>
@@ -89,7 +90,7 @@ static int HostXWantDamageDebug = 0;
 
 extern Bool EphyrWantResize;
 
-char *ephyrResName = NULL;
+const char *ephyrResName = NULL;
 int ephyrResNameFromCmd = 0;
 char *ephyrTitle = NULL;
 Bool ephyr_glamor = FALSE;
@@ -655,6 +656,10 @@ hostx_init_window(ScrnInfoPtr pScrn) {
 
         if (tmpstr && (!ephyrResNameFromCmd)) {
             ephyrResName = tmpstr;
+        }
+
+        if (!ephyrResName) {
+          ephyrResName = xf86ServerName;
         }
 
         class_len = strlen(ephyrResName) + 1 + strlen("Xorg") + 1;
