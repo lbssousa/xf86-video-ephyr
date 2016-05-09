@@ -46,11 +46,13 @@
 #include <string.h>
 
 #include <xorg-server.h>
+#include <xorgVersion.h>
 #include <fb.h>
 #include <micmap.h>
 #include <mipointer.h>
 #include <shadow.h>
 #include <xf86.h>
+#include <xf86Priv.h>
 #include <xf86Module.h>
 #include <xf86str.h>
 #include <xf86Optrec.h>
@@ -779,15 +781,14 @@ miPointerScreenFuncRec ephyrPointerScreenFuncs = {
     ephyrWarpCursor,
 };
 
-#if 0
-static KdScreenInfo *
+
+static ScrnInfoPtr
 screen_from_window(Window w) {
     int i = 0;
 
-    for (i = 0; i < screenInfo.numScreens; i++) {
-        ScreenPtr pScreen = screenInfo.screens[i];
-        KdPrivScreenPtr kdscrpriv = KdGetScreenPriv(pScreen);
-        ScrnInfoPtr pScrn = kdscrpriv->screen;
+    for (i = 0; i < xf86NumScreens; i++) {
+        ScreenPtr pScreen = xf86Screens[i]->pScreen;
+        ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
         EphyrScrPrivPtr scrpriv = pScrn->driverPrivate;
 
         if (scrpriv->win == w
@@ -799,9 +800,7 @@ screen_from_window(Window w) {
 
     return NULL;
 }
-#endif
 
-#if 0 /* Disable event listening temporarily */
 static void
 ephyrProcessErrorEvent(xcb_generic_event_t *xev) {
     xcb_generic_error_t *e = (xcb_generic_error_t *)xev;
@@ -819,7 +818,7 @@ ephyrProcessErrorEvent(xcb_generic_event_t *xev) {
 
 static void
 ephyrProcessExpose(xcb_generic_event_t *xev) {
-    xcb_expose_event_t *expose = (xcb_expose_event_t *)xev;
+    xcb_expose_event_t *expose = (xcb_expose_event_t *) xev;
     ScrnInfoPtr pScrn = screen_from_window(expose->window);
     EphyrScrPrivPtr scrpriv = pScrn->driverPrivate;
 
@@ -852,18 +851,24 @@ ephyrProcessConfigureNotify(xcb_generic_event_t *xev)
         return;
     }
 
+#if 0
 #ifdef RANDR
     ephyrResizeScreen(pScrn->pScreen, configure->width, configure->height);
 #endif /* RANDR */
+#endif
 }
 
 static void
-ephyrXcbNotify(int fd, int ready, void *data)
-{
+#if XORG_VERSION_MAJOR == 1 && XORG_VERSION_MINOR <= 18
+ephyrPoll(void) {
+#else
+ephyrXcbNotify(int fd, int ready, void *data) {
+#endif
     xcb_connection_t *conn = hostx_get_xcbconn();
 
     while (TRUE) {
         xcb_generic_event_t *xev = xcb_poll_for_event(conn);
+
         if (!xev) {
             /* If our XCB connection has died (for example, our window was
              * closed), exit now.
@@ -898,7 +903,6 @@ ephyrXcbNotify(int fd, int ready, void *data)
         free(xev);
     }
 }
-#endif
 
 #if 0
 void
@@ -961,22 +965,6 @@ ephyrPutColors(ScreenPtr pScreen, int n, xColorItem * pdefs) {
         RegionUninit(&region);
     }
 }
-
-#if 0 /* Disable event listening temporarily */
-static Status
-MouseEnable(KdPointerInfo * pi) {
-    ((EphyrPointerPrivate *) pi->driverPrivate)->enabled = TRUE;
-    SetNotifyFd(hostx_get_fd(), ephyrXcbNotify, X_NOTIFY_READ, NULL);
-    return Success;
-}
-
-static void
-MouseDisable(KdPointerInfo * pi) {
-    ((EphyrPointerPrivate *) pi->driverPrivate)->enabled = FALSE;
-    RemoveNotifyFd(hostx_get_fd());
-    return;
-}
-#endif
 
 /* End of former ephyr.c
  ****************************************************************
@@ -1223,7 +1211,9 @@ ephyrAllocatePrivate(ScrnInfoPtr pScrn) {
 static Bool
 ephyrPreInit(ScrnInfoPtr pScrn, int flags) {
     const char *displayName = getenv("DISPLAY");
-    const char *accelMethod;
+    const char *accelMethod = NULL;
+    const char *output = NULL;
+    unsigned long parent = 0;
     EphyrScrPrivPtr scrpriv = pScrn->driverPrivate;
     Bool fullscreen = FALSE;
     Bool noAccel = FALSE;
@@ -1300,11 +1290,11 @@ ephyrPreInit(ScrnInfoPtr pScrn, int flags) {
     }
 #endif
 
-    if (xf86GetOptValInteger(EphyrOptions,
-                             OPTION_PARENTWINDOW,
-                             &scrpriv->win_pre_existing)) {
-        xf86DrvMsg(pScrn->scrnIndex, X_INFO, "Targeting parent window 0x%x\n",
-                   scrpriv->win_pre_existing);
+    if (xf86GetOptValULong(EphyrOptions,
+                           OPTION_PARENTWINDOW,
+                           &parent)) {
+        xf86DrvMsg(pScrn->scrnIndex, X_INFO, "Targeting parent window 0x%lx\n",
+                   parent);
     }
 
     if (xf86GetOptValBool(EphyrOptions,
@@ -1319,14 +1309,15 @@ ephyrPreInit(ScrnInfoPtr pScrn, int flags) {
     }
 
     if (xf86IsOptionSet(EphyrOptions, OPTION_OUTPUT)) {
-        scrpriv->output = xf86GetOptValString(EphyrOptions,
-                                              OPTION_OUTPUT);
+        output = xf86GetOptValString(EphyrOptions,
+                                     OPTION_OUTPUT);
         xf86DrvMsg(pScrn->scrnIndex, X_INFO,
                    "Targeting host X server output \"%s\"\n",
-                   scrpriv->output);
+                   output);
     }
 
     xf86ShowUnusedOptions(pScrn->scrnIndex, pScrn->options);
+    hostx_add_screen(pScrn, parent, pScrn->scrnIndex, FALSE, output);
 
     if (hostx_get_xcbconn() != NULL) {
         xf86DrvMsg(pScrn->scrnIndex, X_INFO,
@@ -1471,6 +1462,17 @@ ephyrPrintPscreen(ScrnInfoPtr p) {
   }
  */
 
+#if XORG_VERSION_MAJOR == 1 && XORG_VERSION_MINOR <= 18
+static void
+ephyrBlockHandler(pointer data, OSTimePtr wt, pointer LastSelectMask) {
+    ephyrPoll();
+}
+
+static void
+ephyrWakeupHandler(pointer data, int i, pointer LastSelectMask) {
+}
+#endif
+
 static Bool
 ephyrCloseScreen(CLOSE_SCREEN_ARGS_DECL) {
     ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
@@ -1480,8 +1482,12 @@ ephyrCloseScreen(CLOSE_SCREEN_ARGS_DECL) {
 
     shadowRemove(pScreen, pScreen->GetScreenPixmap(pScreen));
 
-#if 0 /* Disable event listening temporarily */
-    RemoveBlockAndWakeupHandlers(ephyrBlockHandler, ephyrWakeupHandler, scrpriv);
+#if XORG_VERSION_MAJOR == 1 && XORG_VERSION_MINOR <= 18
+    RemoveBlockAndWakeupHandlers(ephyrBlockHandler,
+                                 ephyrWakeupHandler,
+                                 NULL);
+#else
+    RemoveNotifyFd(hostx_get_fd());
 #endif
 
     hostx_close_screen(pScrn);
@@ -1549,8 +1555,12 @@ ephyrScreenInit(SCREEN_INIT_ARGS_DECL) {
     scrpriv->CloseScreen = pScreen->CloseScreen;
     pScreen->CloseScreen = ephyrCloseScreen;
 
-#if 0 /* Disable event listening temporarily */
-    RegisterBlockAndWakeupHandlers(ephyrBlockHandler, ephyrWakeupHandler, scrpriv);
+#if XORG_VERSION_MAJOR == 1 && XORG_VERSION_MINOR <= 18
+    RegisterBlockAndWakeupHandlers(ephyrBlockHandler,
+                                   ephyrWakeupHandler,
+                                   NULL);
+#else
+    SetNotifyFd(hostx_get_fd(), ephyrXcbNotify, X_NOTIFY_READ, NULL);
 #endif
 
     return TRUE;
@@ -1646,17 +1656,6 @@ ephyrFreePrivate(ScrnInfoPtr pScrn) {
     free(pScrn->driverPrivate);
     pScrn->driverPrivate = NULL;
 }
-
-#if 0 /* Disable event listening temporarily */
-static void
-ephyrBlockHandler(pointer data, OSTimePtr wt, pointer LastSelectMask) {
-    ephyrPoll();
-}
-
-static void
-ephyrWakeupHandler(pointer data, int i, pointer LastSelectMask) {
-}
-#endif
 
 _X_EXPORT DriverRec EPHYR = {
     EPHYR_VERSION,

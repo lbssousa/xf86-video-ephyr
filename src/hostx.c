@@ -133,14 +133,16 @@ void
 hostx_add_screen(ScrnInfoPtr pScrn, unsigned long win_id, int screen_num, Bool use_geometry, const char *output)
 {
     EphyrScrPrivPtr scrpriv = pScrn->driverPrivate;
+#if 0
     int index = HostX.n_screens;
 
     HostX.n_screens += 1;
     HostX.screens = reallocarray(HostX.screens,
                                  HostX.n_screens, sizeof(HostX.screens[0]));
     HostX.screens[index] = pScrn;
+#endif
 
-    scrpriv->screen = pScrn;
+    scrpriv->pScrn = pScrn;
     scrpriv->win_pre_existing = win_id;
     scrpriv->win_explicit_position = use_geometry;
     scrpriv->output = output;

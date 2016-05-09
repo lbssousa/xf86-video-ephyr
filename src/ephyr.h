@@ -85,7 +85,7 @@ typedef struct _ephyrScrPriv {
     unsigned char *fb_data;     /* only used when host bpp != server bpp */
     xcb_shm_segment_info_t shminfo;
 
-    ScrnInfoPtr screen;
+    ScrnInfoPtr pScrn;
     int mynum;                  /* Screen number */
     unsigned long cmap[256];
 
