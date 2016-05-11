@@ -81,7 +81,7 @@ void hostx_use_fullscreen(void);
 int hostx_want_fullscreen(void);
 int hostx_want_preexisting_window(ScrnInfoPtr pScrn);
 void hostx_use_preexisting_window(unsigned long win_id);
-void hostx_use_resname(char *name, int fromcmd);
+void hostx_use_resname(const char *name, int fromconfig);
 void hostx_set_title(char *name);
 void hostx_handle_signal(int signum);
 Bool hostx_init(void);

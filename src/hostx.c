@@ -91,7 +91,7 @@ static int HostXWantDamageDebug = 0;
 extern Bool EphyrWantResize;
 
 const char *ephyrResName = NULL;
-int ephyrResNameFromCmd = 0;
+Bool ephyrResNameFromConfig = FALSE;
 char *ephyrTitle = NULL;
 Bool ephyr_glamor = FALSE;
 
@@ -401,10 +401,9 @@ hostx_handle_signal(int signum)
 }
 
 void
-hostx_use_resname(char *name, int fromcmd)
-{
+hostx_use_resname(const char *name, Bool fromconfig) {
     ephyrResName = name;
-    ephyrResNameFromCmd = fromcmd;
+    ephyrResNameFromConfig = fromconfig;
 }
 
 void
@@ -662,12 +661,8 @@ hostx_init_window(ScrnInfoPtr pScrn) {
 
         tmpstr = getenv("RESOURCE_NAME");
 
-        if (tmpstr && (!ephyrResNameFromCmd)) {
+        if (tmpstr && (!ephyrResNameFromConfig)) {
             ephyrResName = tmpstr;
-        }
-
-        if (!ephyrResName) {
-          ephyrResName = xf86ServerName;
         }
 
         class_len = strlen(ephyrResName) + 1 + strlen("Xorg") + 1;

@@ -1007,6 +1007,7 @@ ephyrPutColors(ScreenPtr pScreen, int n, xColorItem * pdefs) {
 typedef enum {
     OPTION_DISPLAY,
     OPTION_XAUTHORITY,
+    OPTION_RESNAME,
 #ifdef GLAMOR
     OPTION_NOACCEL,
     OPTION_ACCELMETHOD,
@@ -1026,11 +1027,12 @@ static SymTabRec EphyrChipsets[] = {
 };
 
 static OptionInfoRec EphyrOptions[] = {
-    { OPTION_DISPLAY,      "Display",     OPTV_STRING,   {0}, FALSE },
-    { OPTION_XAUTHORITY,   "Xauthority",  OPTV_STRING,   {0}, FALSE },
+    { OPTION_DISPLAY,      "Display",      OPTV_STRING,   {0}, FALSE },
+    { OPTION_XAUTHORITY,   "Xauthority",   OPTV_STRING,   {0}, FALSE },
+    { OPTION_RESNAME,      "ResourceName", OPTV_STRING,   {0}, FALSE },
 #ifdef GLAMOR
-    { OPTION_NOACCEL,      "NoAccel",     OPTV_BOOLEAN,  {0}, FALSE },
-    { OPTION_ACCELMETHOD,  "AccelMethod", OPTV_STRING,   {0}, FALSE },
+    { OPTION_NOACCEL,      "NoAccel",      OPTV_BOOLEAN,  {0}, FALSE },
+    { OPTION_ACCELMETHOD,  "AccelMethod",  OPTV_STRING,   {0}, FALSE },
 #endif
     { OPTION_PARENTWINDOW, "ParentWindow", OPTV_INTEGER, {0}, FALSE },
     { OPTION_FULLSCREEN,   "Fullscreen",   OPTV_BOOLEAN, {0}, FALSE },
@@ -1299,6 +1301,14 @@ ephyrPreInit(ScrnInfoPtr pScrn, int flags) {
                xf86GetOptValString(EphyrOptions,
                                    OPTION_XAUTHORITY),
                TRUE);
+    }
+
+    if (xf86IsOptionSet(EphyrOptions, OPTION_RESNAME)) {
+        hostx_use_resname(xf86GetOptValString(EphyrOptions,
+                                              OPTION_RESNAME),
+                          TRUE);
+    } else {
+        hostx_use_resname(xf86ServerName, FALSE);
     }
 
 #ifdef GLAMOR
