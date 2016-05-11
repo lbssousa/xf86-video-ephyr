@@ -839,8 +839,7 @@ ephyrProcessExpose(xcb_generic_event_t *xev) {
 }
 
 static void
-ephyrProcessConfigureNotify(xcb_generic_event_t *xev)
-{
+ephyrProcessConfigureNotify(xcb_generic_event_t *xev) {
     xcb_configure_notify_event_t *configure =
         (xcb_configure_notify_event_t *) xev;
     ScrnInfoPtr pScrn = screen_from_window(configure->window);
@@ -859,29 +858,35 @@ ephyrProcessConfigureNotify(xcb_generic_event_t *xev)
 }
 
 static void
+ephyrProcessMouseMotion(xcb_generic_event_t *xev) {
+}
+
+static void
+ephyrProcessKeyPress(xcb_generic_event_t *xev) {
+}
+
+static void
+ephyrProcessKeyRelease(xcb_generic_event_t *xev) {
+}
+
+static void
+ephyrProcessButtonPress(xcb_generic_event_t *xev) {
+}
+
+static void
+ephyrProcessButtonRelease(xcb_generic_event_t *xev) {
+}
+
+static void
 #if XORG_VERSION_MAJOR == 1 && XORG_VERSION_MINOR <= 18
 ephyrPoll(void) {
 #else
 ephyrXcbNotify(int fd, int ready, void *data) {
 #endif
     xcb_connection_t *conn = hostx_get_xcbconn();
+    xcb_generic_event_t *xev;
 
-    while (TRUE) {
-        xcb_generic_event_t *xev = xcb_poll_for_event(conn);
-
-        if (!xev) {
-            /* If our XCB connection has died (for example, our window was
-             * closed), exit now.
-             */
-            if (xcb_connection_has_error(conn)) {
-                CloseWellKnownConnections();
-                OsCleanup(1);
-                exit(1);
-            }
-
-            break;
-        }
-
+    while ((xev = xcb_poll_for_event(conn)) != NULL) {
         switch (xev->response_type & 0x7f) {
         case 0:
             ephyrProcessErrorEvent(xev);
@@ -889,6 +894,26 @@ ephyrXcbNotify(int fd, int ready, void *data) {
 
         case XCB_EXPOSE:
             ephyrProcessExpose(xev);
+            break;
+
+        case XCB_MOTION_NOTIFY:
+            ephyrProcessMouseMotion(xev);
+            break;
+
+        case XCB_KEY_PRESS:
+            ephyrProcessKeyPress(xev);
+            break;
+
+        case XCB_KEY_RELEASE:
+            ephyrProcessKeyRelease(xev);
+            break;
+
+        case XCB_BUTTON_PRESS:
+            ephyrProcessButtonPress(xev);
+            break;
+
+        case XCB_BUTTON_RELEASE:
+            ephyrProcessButtonRelease(xev);
             break;
 
         case XCB_CONFIGURE_NOTIFY:
@@ -901,6 +926,15 @@ ephyrXcbNotify(int fd, int ready, void *data) {
         }
 
         free(xev);
+    }
+
+    /* If our XCB connection has died (for example, our window was
+     * closed), exit now.
+     */
+    if (xcb_connection_has_error(conn)) {
+        CloseWellKnownConnections();
+        OsCleanup(1);
+        exit(1);
     }
 }
 
@@ -1485,7 +1519,7 @@ ephyrCloseScreen(CLOSE_SCREEN_ARGS_DECL) {
 #if XORG_VERSION_MAJOR == 1 && XORG_VERSION_MINOR <= 18
     RemoveBlockAndWakeupHandlers(ephyrBlockHandler,
                                  ephyrWakeupHandler,
-                                 NULL);
+                                 pScrn);
 #else
     RemoveNotifyFd(hostx_get_fd());
 #endif
@@ -1558,7 +1592,7 @@ ephyrScreenInit(SCREEN_INIT_ARGS_DECL) {
 #if XORG_VERSION_MAJOR == 1 && XORG_VERSION_MINOR <= 18
     RegisterBlockAndWakeupHandlers(ephyrBlockHandler,
                                    ephyrWakeupHandler,
-                                   NULL);
+                                   pScrn);
 #else
     SetNotifyFd(hostx_get_fd(), ephyrXcbNotify, X_NOTIFY_READ, NULL);
 #endif

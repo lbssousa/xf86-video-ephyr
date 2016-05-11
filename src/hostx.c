@@ -569,7 +569,13 @@ hostx_init_window(ScrnInfoPtr pScrn) {
     size_t class_len;
     EphyrScrPrivPtr scrpriv = pScrn->driverPrivate;
 
-    attrs[0] = XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_STRUCTURE_NOTIFY;
+    attrs[0] = XCB_EVENT_MASK_BUTTON_PRESS
+             | XCB_EVENT_MASK_BUTTON_RELEASE
+             | XCB_EVENT_MASK_POINTER_MOTION
+             | XCB_EVENT_MASK_KEY_PRESS
+             | XCB_EVENT_MASK_KEY_RELEASE
+             | XCB_EVENT_MASK_EXPOSURE
+             | XCB_EVENT_MASK_STRUCTURE_NOTIFY;
     attr_mask |= XCB_CW_EVENT_MASK;
     xscreen = xcb_aux_get_screen(HostX.conn, HostX.screen);
     scrpriv->win = xcb_generate_id(HostX.conn);
