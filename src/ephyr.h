@@ -34,10 +34,10 @@
 #include <xf86str.h>
 #include <shadow.h>
 #include <mipointer.h>
+#include <xcb/render.h>
 #include <xcb/xcb_image.h>
 
 #include "os.h"                 /* for OsSignal() */
-#include "hostx.h"
 #include "exa.h"
 
 #ifdef RANDR
@@ -45,11 +45,6 @@
 #endif
 
 #include "damage.h"
-
-typedef struct _ephyrPriv {
-    CARD8 *base;
-    int bytes_per_line;
-} EphyrPriv;
 
 typedef struct _ephyrFakexaPriv {
     ExaDriverPtr exa;
@@ -65,12 +60,28 @@ typedef struct _ephyrFakexaPriv {
     GCPtr pGC;
 } EphyrFakexaPriv;
 
-typedef struct _ephyrScrPriv {
-    /* ephyr server info */
+typedef struct _EphyrPrivate {
+    /* ephyr server info
     Rotation randr;
     Bool shadow;
+    EphyrFakexaPriv *fakexa; */
     DamagePtr pDamage;
-    EphyrFakexaPriv *fakexa;
+
+    /* Host X server info */
+    char *server_dpy_name;
+    xcb_connection_t *conn;
+    int screen;
+    xcb_visualtype_t *visual;
+    Window winroot;
+    xcb_gcontext_t  gc;
+    xcb_render_pictformat_t argb_format;
+    xcb_cursor_t empty_cursor;
+    int depth;
+    Bool use_sw_cursor;
+    Bool use_fullscreen;
+    Bool have_shm;
+
+    long damage_debug_msec;
 
     /* Host X window info */
     xcb_window_t win;
@@ -98,7 +109,7 @@ typedef struct _ephyrScrPriv {
      * ephyr_glamor_glx.c)
      */
     struct ephyr_glamor *glamor;
-} EphyrScrPriv, *EphyrScrPrivPtr;
+} EphyrPrivate, *EphyrPrivatePtr;
 
 extern miPointerScreenFuncRec ephyrPointerScreenFuncs;
 
