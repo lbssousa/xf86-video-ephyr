@@ -757,6 +757,7 @@ hostx_close_screen(ScrnInfoPtr pScrn) {
     }
 
     xcb_image_destroy(priv->ximg);
+    priv->ximg = NULL;
 }
 
 /**
