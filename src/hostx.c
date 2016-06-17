@@ -114,18 +114,6 @@ hostx_set_screen_number(ScrnInfoPtr pScrn, int number) {
     }
 }
 
-int
-hostx_want_host_cursor(ScrnInfoPtr pScrn) {
-    EphyrPrivatePtr priv = pScrn->driverPrivate;
-    return !priv->use_sw_cursor;
-}
-
-void
-hostx_use_sw_cursor(ScrnInfoPtr pScrn) {
-    EphyrPrivatePtr priv = pScrn->driverPrivate;
-    priv->use_sw_cursor = TRUE;
-}
-
 xcb_cursor_t
 hostx_get_empty_cursor(ScrnInfoPtr pScrn) {
     EphyrPrivatePtr priv = pScrn->driverPrivate;

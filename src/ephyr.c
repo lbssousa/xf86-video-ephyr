@@ -1712,7 +1712,7 @@ ephyrPreInit(ScrnInfoPtr pScrn, int flags) {
         }
     }
 
-    if (!hostx_want_host_cursor(pScrn)) {
+    if (!priv->use_sw_cursor) {
         /* Ditch the cursor, we provide our 'own' */
         xcb_change_window_attributes(priv->conn,
                                      priv->win,
