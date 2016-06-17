@@ -77,6 +77,8 @@
 
 #define TIMER_CALLBACK_INTERVAL 20
 
+#define HOST_DEPTH_MATCHES_SERVER(_vars) (priv->depth == (_vars)->server_depth)
+
 /* End of driver.c includes
  ******************************************************
  * Beginning of former ephyr.c */
@@ -2005,23 +2007,168 @@ ephyrCloseScreen(CLOSE_SCREEN_ARGS_DECL) {
     return (*pScreen->CloseScreen)(CLOSE_SCREEN_ARGS);
 }
 
+/**
+ * hostx_screen_init creates the XImage that will contain the front buffer of
+ * the ephyr screen, and possibly offscreen memory.
+ *
+ * @param width width of the screen
+ * @param height height of the screen
+ * @param buffer_height  height of the rectangle to be allocated.
+ *
+ * hostx_screen_init() creates an XImage, using MIT-SHM if it's available.
+ * buffer_height can be used to create a larger offscreen buffer, which is used
+ * by fakexa for storing offscreen pixmap data.
+ */
+
 /* Called at each server generation */
 static Bool
 ephyrScreenInit(SCREEN_INIT_ARGS_DECL) {
     ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
     EphyrPrivatePtr priv = pScrn->driverPrivate;
     Pixel redMask, greenMask, blueMask;
-    char *fb_data;
+    Bool shm_success = FALSE;
+    char *fb_data = NULL;
+    int x = pScrn->frameX0, y = pScrn->frameY0;
+    unsigned int width = pScrn->virtualX,
+                 height = pScrn->virtualY,
+                 buffer_height = ephyrBufferHeight(pScrn);
 
     xf86DrvMsg(pScrn->scrnIndex, X_INFO, "ephyrScreenInit\n");
     ephyrPrintPscreen(pScrn);
 
-    fb_data = hostx_screen_init(pScrn,
-                                pScrn->frameX0, pScrn->frameY0,
-                                pScrn->virtualX, pScrn->virtualY,
-                                ephyrBufferHeight(pScrn),
-                                NULL, /* bytes per line/row (not used) */
-                                &pScrn->bitsPerPixel);
+/*********************** hostx_screen_init ***************************/
+    if (!ephyr_glamor && priv->have_shm) {
+        priv->ximg = xcb_image_create_native(priv->conn,
+                                             width,
+                                             buffer_height,
+                                             XCB_IMAGE_FORMAT_Z_PIXMAP,
+                                             priv->depth,
+                                             NULL,
+                                             ~0,
+                                             NULL);
+
+        priv->shminfo.shmid =
+            shmget(IPC_PRIVATE,
+                   priv->ximg->stride * buffer_height,
+                   IPC_CREAT | 0777);
+        priv->ximg->data = shmat(priv->shminfo.shmid, 0, 0);
+        priv->shminfo.shmaddr = priv->ximg->data;
+
+        if (priv->ximg->data == (uint8_t *) -1) {
+            EPHYR_DBG
+                ("Can't attach SHM Segment, falling back to plain XImages");
+            priv->have_shm = FALSE;
+            xcb_image_destroy(priv->ximg);
+            shmctl(priv->shminfo.shmid, IPC_RMID, 0);
+        } else {
+            EPHYR_DBG("SHM segment attached %p", priv->shminfo.shmaddr);
+            priv->shminfo.shmseg = xcb_generate_id(priv->conn);
+            xcb_shm_attach(priv->conn,
+                           priv->shminfo.shmseg,
+                           priv->shminfo.shmid,
+                           FALSE);
+            shm_success = TRUE;
+        }
+    }
+
+    if (!ephyr_glamor && !shm_success) {
+        EPHYR_DBG("Creating image %dx%d for screen priv=%p\n",
+                  width, buffer_height, priv);
+        priv->ximg = xcb_image_create_native(priv->conn,
+                                             width,
+                                             buffer_height,
+                                             XCB_IMAGE_FORMAT_Z_PIXMAP,
+                                             priv->depth,
+                                             NULL,
+                                             ~0,
+                                             NULL);
+
+        /* Match server byte order so that the image can be converted to
+         * the native byte order by xcb_image_put() before drawing */
+        if (HOST_DEPTH_MATCHES_SERVER(priv)) {
+            priv->ximg->byte_order = IMAGE_BYTE_ORDER;
+        }
+
+        priv->ximg->data =
+            xallocarray(priv->ximg->stride, buffer_height);
+    }
+
+    {
+        uint32_t mask = XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT;
+        uint32_t values[2] = {width, height};
+        xcb_configure_window(priv->conn, priv->win, mask, values);
+    }
+
+    if (priv->win_pre_existing == None && !EphyrWantResize) {
+        /* Ask the WM to keep our size static */
+        xcb_size_hints_t size_hints = {0};
+        size_hints.max_width = size_hints.min_width = width;
+        size_hints.max_height = size_hints.min_height = height;
+        size_hints.flags = (XCB_ICCCM_SIZE_HINT_P_MIN_SIZE |
+                            XCB_ICCCM_SIZE_HINT_P_MAX_SIZE);
+        xcb_icccm_set_wm_normal_hints(priv->conn, priv->win,
+                                      &size_hints);
+    }
+
+    xcb_map_window(priv->conn, priv->win);
+
+    /* Set explicit window position if it was informed in
+     * -screen option (WxH+X or WxH+X+Y). Otherwise, accept the
+     * position set by WM.
+     * The trick here is putting this code after xcb_map_window() call,
+     * so these values won't be overriden by WM. */
+    if (priv->win_explicit_position) {
+        uint32_t mask = XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y;
+        uint32_t values[2] = {x, y};
+        xcb_configure_window(priv->conn, priv->win, mask, values);
+    }
+
+    xcb_aux_sync(priv->conn);
+
+    priv->win_width = width;
+    priv->win_height = height;
+    priv->win_x = x;
+    priv->win_y = y;
+
+    #ifdef GLAMOR
+    if (ephyr_glamor) {
+        /* *bytes_per_line = 0; */
+        pScrn->bitsPerPixel = 0;
+        ephyr_glamor_set_window_size(priv->glamor,
+                                     priv->win_width, priv->win_height);
+    } else
+    #endif
+    {
+        if (HOST_DEPTH_MATCHES_SERVER(priv)) {
+            /*
+            if (bytes_per_line != NULL) {
+                *bytes_per_line = priv->ximg->stride;
+            }
+            */
+
+            pScrn->bitsPerPixel = priv->ximg->bpp;
+
+            EPHYR_DBG("Host matches server");
+            fb_data = priv->ximg->data;
+        } else {
+            int bytes_per_pixel = priv->server_depth >> 3;
+            int stride = (width * bytes_per_pixel + 0x3) & ~0x3;
+
+            /*
+            if (bytes_per_line != NULL) {
+                *bytes_per_line = stride;
+            }
+            */
+
+            pScrn->bitsPerPixel = priv->server_depth;
+
+            EPHYR_DBG("server bpp %i", bytes_per_pixel);
+            priv->fb_data = xallocarray(stride, buffer_height);
+            fb_data = priv->fb_data;
+        }
+    }
+/*********************** hostx_screen_init ***************************/
+
     miClearVisualTypes();
 
     if (!miSetVisualTypesAndMasks(pScrn->depth,
@@ -2037,7 +2184,7 @@ ephyrScreenInit(SCREEN_INIT_ARGS_DECL) {
 
     if (!fbScreenInit(pScreen,
                       fb_data,
-                      pScrn->virtualX, pScrn->virtualY, pScrn->xDpi,
+                      width, height, pScrn->xDpi,
                       pScrn->yDpi, pScrn->displayWidth, pScrn->bitsPerPixel)) {
         return FALSE;
     }
