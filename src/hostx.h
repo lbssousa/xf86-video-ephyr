@@ -55,7 +55,6 @@ int hostx_want_preexisting_window(ScrnInfoPtr pScrn);
 void hostx_use_preexisting_window(unsigned long win_id);
 void hostx_set_title(const char *name);
 void hostx_handle_signal(int signum);
-Bool hostx_init(ScrnInfoPtr pScrn);
 Bool hostx_init_window(ScrnInfoPtr pScrn);
 void hostx_set_display_name(ScrnInfoPtr pScrn, const char *name);
 void hostx_set_screen_number(ScrnInfoPtr pScrn, int number);

@@ -27,6 +27,11 @@
 #include "config.h"
 #endif
 
+#include <sys/shm.h>
+
+#include <xcb/xcb.h>
+#include <xcb/xcb_aux.h>
+
 #include "ephyr.h"
 #include "hostx.h"
 
@@ -87,6 +92,9 @@ Bool EphyrWantNoHostGrab = 0;
 
 const char *ephyrResName = NULL;
 Bool ephyrResNameFromConfig = FALSE;
+
+static xcb_intern_atom_cookie_t cookie_WINDOW_STATE,
+                                cookie_WINDOW_STATE_FULLSCREEN;
 
 #if 0
 Bool
@@ -1257,6 +1265,13 @@ ephyrPreInit(ScrnInfoPtr pScrn, int flags) {
     const char *displayName = getenv("DISPLAY");
     const char *accelMethod = NULL;
     Bool noAccel = FALSE;
+    xcb_pixmap_t cursor_pxm;
+    xcb_gcontext_t cursor_gc;
+    uint16_t red, green, blue;
+    uint32_t pixel;
+    int index;
+    xcb_screen_t *xscreen;
+    xcb_rectangle_t rect = { 0, 0, 1, 1 };
 
     xf86DrvMsg(pScrn->scrnIndex, X_INFO, "ephyrPreInit\n");
 
@@ -1373,15 +1388,135 @@ ephyrPreInit(ScrnInfoPtr pScrn, int flags) {
         priv->win_explicit_position = TRUE;
     }
 
-    if (priv->conn != NULL) {
-        xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-                   "Reusing current XCB connection to display %s\n",
-                   displayName);
-    } else if (!hostx_init(pScrn)) {
+/******************** hostx_init *********************/
+#ifdef GLAMOR
+    if (ephyr_glamor) {
+        priv->conn = ephyr_glamor_connect();
+    } else
+#endif
+    {
+        priv->conn = xcb_connect(NULL, &priv->screen);
+    }
+
+    if (!priv->conn || xcb_connection_has_error(priv->conn)) {
+        priv->conn = NULL;
         xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "Can't open display: %s\n",
                    displayName);
         return FALSE;
     }
+
+    xscreen = xcb_aux_get_screen(priv->conn, priv->screen);
+    priv->winroot = xscreen->root;
+    priv->gc = xcb_generate_id(priv->conn);
+    priv->depth = xscreen->root_depth;
+
+#ifdef GLAMOR
+    if (ephyr_glamor) {
+        priv->visual = ephyr_glamor_get_visual();
+    } else
+#endif
+    {
+        priv->visual = xcb_aux_find_visual_by_id(xscreen, xscreen->root_visual);
+    }
+
+    xcb_create_gc(priv->conn, priv->gc, priv->winroot, 0, NULL);
+    cookie_WINDOW_STATE = xcb_intern_atom(priv->conn, FALSE,
+                                          strlen("_NET_WM_STATE"),
+                                          "_NET_WM_STATE");
+    cookie_WINDOW_STATE_FULLSCREEN =
+        xcb_intern_atom(priv->conn, FALSE,
+                        strlen("_NET_WM_STATE_FULLSCREEN"),
+                        "_NET_WM_STATE_FULLSCREEN");
+
+    if (!xcb_aux_parse_color("red", &red, &green, &blue)) {
+        xcb_lookup_color_cookie_t c =
+            xcb_lookup_color(priv->conn, xscreen->default_colormap, 3, "red");
+        xcb_lookup_color_reply_t *reply =
+            xcb_lookup_color_reply(priv->conn, c, NULL);
+        red = reply->exact_red;
+        green = reply->exact_green;
+        blue = reply->exact_blue;
+        free(reply);
+    }
+
+    {
+        xcb_alloc_color_cookie_t c = xcb_alloc_color(priv->conn,
+                                                     xscreen->default_colormap,
+                                                     red, green, blue);
+        xcb_alloc_color_reply_t *r = xcb_alloc_color_reply(priv->conn, c, NULL);
+        red = r->red;
+        green = r->green;
+        blue = r->blue;
+        pixel = r->pixel;
+        free(r);
+    }
+
+    xcb_change_gc(priv->conn, priv->gc, XCB_GC_FOREGROUND, &pixel);
+
+    cursor_pxm = xcb_generate_id(priv->conn);
+    xcb_create_pixmap(priv->conn, 1, cursor_pxm, priv->winroot, 1, 1);
+    cursor_gc = xcb_generate_id(priv->conn);
+    pixel = 0;
+    xcb_create_gc(priv->conn, cursor_gc, cursor_pxm,
+                  XCB_GC_FOREGROUND, &pixel);
+    xcb_poly_fill_rectangle(priv->conn, cursor_pxm, cursor_gc, 1, &rect);
+    xcb_free_gc(priv->conn, cursor_gc);
+    priv->empty_cursor = xcb_generate_id(priv->conn);
+    xcb_create_cursor(priv->conn,
+                      priv->empty_cursor,
+                      cursor_pxm, cursor_pxm,
+                      0,0,0,
+                      0,0,0,
+                      1,1);
+    xcb_free_pixmap(priv->conn, cursor_pxm);
+
+    /* XXX: investigate this
+    if (!hostx_want_host_cursor ()) {
+        CursorVisible = TRUE;
+    }*/
+
+    /* Try to get share memory ximages for a little bit more speed */
+    if (!hostx_has_extension(pScrn, &xcb_shm_id) || getenv("XEPHYR_NO_SHM")) {
+        fprintf(stderr, "\nNested Xorg unable to use SHM XImages\n");
+        priv->have_shm = FALSE;
+    } else {
+        /* Really really check we have shm - better way ?*/
+        xcb_shm_segment_info_t shminfo;
+        xcb_generic_error_t *e;
+        xcb_void_cookie_t cookie;
+        xcb_shm_seg_t shmseg;
+
+        priv->have_shm = TRUE;
+
+        shminfo.shmid = shmget(IPC_PRIVATE, 1, IPC_CREAT|0777);
+        shminfo.shmaddr = shmat(shminfo.shmid,0,0);
+
+        shmseg = xcb_generate_id(priv->conn);
+        cookie = xcb_shm_attach_checked(priv->conn, shmseg, shminfo.shmid,
+                                        TRUE);
+        e = xcb_request_check(priv->conn, cookie);
+
+        if (e) {
+            fprintf(stderr, "\nNested Xorg unable to use SHM XImages\n");
+            priv->have_shm = FALSE;
+            free(e);
+        }
+
+        shmdt(shminfo.shmaddr);
+        shmctl(shminfo.shmid, IPC_RMID, 0);
+    }
+
+    xcb_flush(priv->conn);
+
+    /* Setup the pause time between paints when debugging updates */
+
+    priv->damage_debug_msec = 20000;    /* 1/50 th of a second */
+
+    if (getenv("XEPHYR_PAUSE")) {
+        priv->damage_debug_msec = strtol(getenv("XEPHYR_PAUSE"), NULL, 0);
+        EPHYR_DBG("pause is %li\n", priv->damage_debug_msec);
+    }
+/******************** hostx_init *********************/
 
     if (!hostx_init_window(pScrn)) {
         xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
