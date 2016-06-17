@@ -70,10 +70,6 @@
 
 #define TIMER_CALLBACK_INTERVAL 20
 
-#ifndef HW_SKIP_CONSOLE
-#define HW_SKIP_CONSOLE 4
-#endif
-
 /* End of driver.c includes
  ******************************************************
  * Beginning of former ephyr.c */
@@ -1672,15 +1668,15 @@ ephyrAvailableOptions(int chipid, int busid) {
 }
 
 static Bool
-ephyrDriverFunc(ScrnInfoPtr pScrn, xorgDriverFuncOp op, pointer ptr) {
-    CARD32 *flag;
+ephyrDriverFunc(ScrnInfoPtr pScrn, xorgDriverFuncOp op, void *data) {
+    xorgHWFlags *flag;
     xf86Msg(X_INFO, "ephyrDriverFunc\n");
 
     /* XXX implement */
     switch(op) {
     case GET_REQUIRED_HW_INTERFACES:
-        flag = (CARD32*)ptr;
-        (*flag) = HW_SKIP_CONSOLE;
+        flag = data;
+        *flag = HW_SKIP_CONSOLE;
         return TRUE;
 
     case RR_GET_INFO:
