@@ -304,18 +304,6 @@ hostx_get_output_geometry(ScrnInfoPtr pScrn,
     }
 }
 
-void
-hostx_use_fullscreen(ScrnInfoPtr pScrn) {
-    EphyrPrivatePtr priv = pScrn->driverPrivate;
-    priv->use_fullscreen = TRUE;
-}
-
-int
-hostx_want_fullscreen(ScrnInfoPtr pScrn) {
-    EphyrPrivatePtr priv = pScrn->driverPrivate;
-    return priv->use_fullscreen;
-}
-
 static xcb_intern_atom_cookie_t cookie_WINDOW_STATE,
 				cookie_WINDOW_STATE_FULLSCREEN;
 

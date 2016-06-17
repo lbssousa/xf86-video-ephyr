@@ -51,9 +51,6 @@ void hostx_get_output_geometry(ScrnInfoPtr pScrn,
                                const char *output,
                                int *x, int *y,
                                unsigned int *width, unsigned int *height);
-
-void hostx_use_fullscreen(ScrnInfoPtr pScrn);
-int hostx_want_fullscreen(ScrnInfoPtr pScrn);
 int hostx_want_preexisting_window(ScrnInfoPtr pScrn);
 void hostx_use_preexisting_window(unsigned long win_id);
 void hostx_set_title(const char *name);

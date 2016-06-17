@@ -1350,13 +1350,10 @@ ephyrPreInit(ScrnInfoPtr pScrn, int flags) {
 
     if (xf86GetOptValBool(EphyrOptions,
                           OPTION_FULLSCREEN,
-                          &fullscreen)) {
-        if (fullscreen) {
-            hostx_use_fullscreen(pScrn);
-        }
+                          &priv->use_fullscreen)) {
 
         xf86DrvMsg(pScrn->scrnIndex, X_INFO, "Fullscreen mode %s\n",
-                   fullscreen ? "enabled" : "disabled");
+                   priv->use_fullscreen ? "enabled" : "disabled");
     }
 
     if (xf86IsOptionSet(EphyrOptions, OPTION_OUTPUT)) {
