@@ -1025,12 +1025,6 @@ hostx_paint_debug_rect(ScrnInfoPtr pScrn,
     nanosleep(&tspec, NULL);
 }
 
-xcb_connection_t *
-hostx_get_xcbconn(ScrnInfoPtr pScrn) {
-    EphyrPrivatePtr priv = pScrn->driverPrivate;
-    return priv->conn;
-}
-
 int
 hostx_get_screen(ScrnInfoPtr pScrn) {
     EphyrPrivatePtr priv = pScrn->driverPrivate;

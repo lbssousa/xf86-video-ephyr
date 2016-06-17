@@ -884,10 +884,10 @@ ephyrPoll(ScrnInfoPtr pScrn) {
 ephyrXcbNotify(int fd, int ready, void *data) {
     ScrnInfoPtr pScrn = data;
 #endif
-    xcb_connection_t *conn = hostx_get_xcbconn(pScrn);
+    EphyrPrivatePtr priv = pScrn->driverPrivate;
     xcb_generic_event_t *xev;
 
-    while ((xev = xcb_poll_for_event(conn)) != NULL) {
+    while ((xev = xcb_poll_for_event(priv->conn)) != NULL) {
         switch (xev->response_type & 0x7f) {
         case 0:
             ephyrProcessErrorEvent(xev);
@@ -932,7 +932,7 @@ ephyrXcbNotify(int fd, int ready, void *data) {
     /* If our XCB connection has died (for example, our window was
      * closed), exit now.
      */
-    if (xcb_connection_has_error(conn)) {
+    if (xcb_connection_has_error(priv->conn)) {
         CloseWellKnownConnections();
         OsCleanup(1);
         exit(1);
@@ -1373,7 +1373,7 @@ ephyrPreInit(ScrnInfoPtr pScrn, int flags) {
         priv->win_explicit_position = TRUE;
     }
 
-    if (hostx_get_xcbconn(pScrn) != NULL) {
+    if (priv->conn != NULL) {
         xf86DrvMsg(pScrn->scrnIndex, X_INFO,
                    "Reusing current XCB connection to display %s\n",
                    displayName);
