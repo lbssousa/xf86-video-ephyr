@@ -85,6 +85,9 @@ Bool EphyrWantGrayScale = 0;
 Bool EphyrWantResize = 0;
 Bool EphyrWantNoHostGrab = 0;
 
+const char *ephyrResName = NULL;
+Bool ephyrResNameFromConfig = FALSE;
+
 #if 0
 Bool
 ephyrInitialize(KdCardInfo * card, EphyrPriv * priv) {
@@ -1241,6 +1244,12 @@ ephyrAllocatePrivate(ScrnInfoPtr pScrn) {
     return TRUE;
 }
 
+static void
+_ephyrUseResname(const char *name, Bool fromconfig) {
+    ephyrResName = name;
+    ephyrResNameFromConfig = fromconfig;
+}
+
 /* Data from here is valid to all server generations */
 static Bool
 ephyrPreInit(ScrnInfoPtr pScrn, int flags) {
@@ -1302,11 +1311,11 @@ ephyrPreInit(ScrnInfoPtr pScrn, int flags) {
     }
 
     if (xf86IsOptionSet(EphyrOptions, OPTION_RESNAME)) {
-        hostx_use_resname(xf86GetOptValString(EphyrOptions,
-                                              OPTION_RESNAME),
+        _ephyrUseResname(xf86GetOptValString(EphyrOptions,
+                                             OPTION_RESNAME),
                           TRUE);
     } else {
-        hostx_use_resname(xf86ServerName, FALSE);
+        _ephyrUseResname(xf86ServerName, FALSE);
     }
 
 #ifdef GLAMOR

@@ -66,10 +66,11 @@ static int HostXWantDamageDebug = 0;
 
 extern Bool EphyrWantResize;
 
-const char *ephyrResName = NULL;
-Bool ephyrResNameFromConfig = FALSE;
 const char *ephyrTitle = NULL;
 Bool ephyr_glamor = FALSE;
+
+extern const char *ephyrResName;
+extern Bool ephyrResNameFromConfig;
 
 Bool
 hostx_has_extension(ScrnInfoPtr pScrn, xcb_extension_t *extension) {
@@ -353,12 +354,6 @@ void
 hostx_handle_signal(int signum) {
     hostx_toggle_damage_debug();
     EPHYR_DBG("Signal caught. Damage Debug:%i\n", HostXWantDamageDebug);
-}
-
-void
-hostx_use_resname(const char *name, Bool fromconfig) {
-    ephyrResName = name;
-    ephyrResNameFromConfig = fromconfig;
 }
 
 void
