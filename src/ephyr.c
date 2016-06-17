@@ -1029,6 +1029,7 @@ typedef enum {
     OPTION_PARENTWINDOW,
     OPTION_FULLSCREEN,
     OPTION_OUTPUT,
+    OPTION_SWCURSOR
 } ephyrOpts;
 
 typedef enum {
@@ -1041,16 +1042,17 @@ static SymTabRec EphyrChipsets[] = {
 };
 
 static OptionInfoRec EphyrOptions[] = {
-    { OPTION_DISPLAY,      "Display",      OPTV_STRING,   {0}, FALSE },
-    { OPTION_XAUTHORITY,   "Xauthority",   OPTV_STRING,   {0}, FALSE },
-    { OPTION_RESNAME,      "ResourceName", OPTV_STRING,   {0}, FALSE },
+    { OPTION_DISPLAY,      "Display",      OPTV_STRING,  {0}, FALSE },
+    { OPTION_XAUTHORITY,   "Xauthority",   OPTV_STRING,  {0}, FALSE },
+    { OPTION_RESNAME,      "ResourceName", OPTV_STRING,  {0}, FALSE },
 #ifdef GLAMOR
-    { OPTION_NOACCEL,      "NoAccel",      OPTV_BOOLEAN,  {0}, FALSE },
-    { OPTION_ACCELMETHOD,  "AccelMethod",  OPTV_STRING,   {0}, FALSE },
+    { OPTION_NOACCEL,      "NoAccel",      OPTV_BOOLEAN, {0}, FALSE },
+    { OPTION_ACCELMETHOD,  "AccelMethod",  OPTV_STRING,  {0}, FALSE },
 #endif
     { OPTION_PARENTWINDOW, "ParentWindow", OPTV_INTEGER, {0}, FALSE },
     { OPTION_FULLSCREEN,   "Fullscreen",   OPTV_BOOLEAN, {0}, FALSE },
     { OPTION_OUTPUT,       "Output",       OPTV_STRING,  {0}, FALSE },
+    { OPTION_SWCURSOR,     "SWCursor",     OPTV_BOOLEAN, {0}, FALSE },
     { -1,                  NULL,           OPTV_NONE,    {0}, FALSE }
 };
 
@@ -1360,6 +1362,7 @@ ephyrPreInit(ScrnInfoPtr pScrn, int flags) {
         priv = pScrn->driverPrivate;
         priv->output = NULL;
         priv->use_fullscreen = FALSE;
+        priv->use_sw_cursor = TRUE;
         priv->win_pre_existing = 0;
         priv->win_explicit_position = FALSE;
     }
@@ -1454,6 +1457,13 @@ ephyrPreInit(ScrnInfoPtr pScrn, int flags) {
         xf86DrvMsg(pScrn->scrnIndex, X_INFO,
                    "Targeting host X server output \"%s\"\n",
                    priv->output);
+    }
+
+    if (xf86GetOptValBool(EphyrOptions,
+                          OPTION_SWCURSOR,
+                          &priv->use_sw_cursor)) {
+        xf86DrvMsg(pScrn->scrnIndex, X_INFO, "Software cursor %s\n",
+                   priv->use_sw_cursor ? "enabled" : "disabled");
     }
 
     xf86ShowUnusedOptions(pScrn->scrnIndex, pScrn->options);
