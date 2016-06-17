@@ -1258,6 +1258,32 @@ _ephyrUseResname(const char *name, Bool fromconfig) {
     ephyrResNameFromConfig = fromconfig;
 }
 
+static void
+_ephyrSetFullscreenHint(EphyrPrivatePtr priv) {
+    xcb_atom_t atom_WINDOW_STATE, atom_WINDOW_STATE_FULLSCREEN;
+    int index;
+    xcb_intern_atom_reply_t *reply;
+
+    reply = xcb_intern_atom_reply(priv->conn, cookie_WINDOW_STATE, NULL);
+    atom_WINDOW_STATE = reply->atom;
+    free(reply);
+
+    reply = xcb_intern_atom_reply(priv->conn, cookie_WINDOW_STATE_FULLSCREEN,
+                                  NULL);
+    atom_WINDOW_STATE_FULLSCREEN = reply->atom;
+    free(reply);
+
+    xcb_change_property(priv->conn,
+                        PropModeReplace,
+                        priv->win,
+                        atom_WINDOW_STATE,
+                        XCB_ATOM_ATOM,
+                        32,
+                        1,
+                        &atom_WINDOW_STATE_FULLSCREEN);
+}
+
+
 /* Data from here is valid to all server generations */
 static Bool
 ephyrPreInit(ScrnInfoPtr pScrn, int flags) {
@@ -1272,6 +1298,11 @@ ephyrPreInit(ScrnInfoPtr pScrn, int flags) {
     int index;
     xcb_screen_t *xscreen;
     xcb_rectangle_t rect = { 0, 0, 1, 1 };
+    uint32_t attrs[2];
+    uint32_t attr_mask = 0;
+    char *tmpstr;
+    char *class_hint;
+    size_t class_len;
 
     xf86DrvMsg(pScrn->scrnIndex, X_INFO, "ephyrPreInit\n");
 
@@ -1518,12 +1549,135 @@ ephyrPreInit(ScrnInfoPtr pScrn, int flags) {
     }
 /******************** hostx_init *********************/
 
-    if (!hostx_init_window(pScrn)) {
-        xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
-                   "Can't create window on display: %s\n",
-                   displayName);
-        return FALSE;
+/********************* hostx_init_window *************/
+    attrs[0] = XCB_EVENT_MASK_BUTTON_PRESS
+             | XCB_EVENT_MASK_BUTTON_RELEASE
+             | XCB_EVENT_MASK_POINTER_MOTION
+             | XCB_EVENT_MASK_KEY_PRESS
+             | XCB_EVENT_MASK_KEY_RELEASE
+             | XCB_EVENT_MASK_EXPOSURE
+             | XCB_EVENT_MASK_STRUCTURE_NOTIFY;
+    attr_mask |= XCB_CW_EVENT_MASK;
+    xscreen = xcb_aux_get_screen(priv->conn, priv->screen);
+    priv->win = xcb_generate_id(priv->conn);
+    priv->server_depth = priv->depth;
+    priv->ximg = NULL;
+    priv->win_x = 0;
+    priv->win_y = 0;
+
+#ifdef GLAMOR
+    if (priv->visual->visual_id != xscreen->root_visual) {
+        attrs[1] = xcb_generate_id(priv->conn);
+        attr_mask |= XCB_CW_COLORMAP;
+        xcb_create_colormap(priv->conn,
+                            XCB_COLORMAP_ALLOC_NONE,
+                            attrs[1],
+                            priv->winroot,
+                            priv->visual->visual_id);
     }
+#endif
+
+    if (priv->win_pre_existing != XCB_WINDOW_NONE) {
+        xcb_get_geometry_reply_t *prewin_geom;
+        xcb_get_geometry_cookie_t cookie;
+        xcb_generic_error_t *e = NULL;
+
+        /* Get screen size from existing window */
+        cookie = xcb_get_geometry(priv->conn,
+                                  priv->win_pre_existing);
+        prewin_geom = xcb_get_geometry_reply(priv->conn, cookie, &e);
+
+        if (e) {
+            free(e);
+            free(prewin_geom);
+            xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
+                       "Can't create window on display: %s\n",
+                       displayName);
+            return FALSE;
+        }
+
+        priv->win_width  = prewin_geom->width;
+        priv->win_height = prewin_geom->height;
+
+        free(prewin_geom);
+
+        xcb_create_window(priv->conn,
+                          XCB_COPY_FROM_PARENT,
+                          priv->win,
+                          priv->win_pre_existing,
+                          0,0,
+                          priv->win_width,
+                          priv->win_height,
+                          0,
+                          XCB_WINDOW_CLASS_COPY_FROM_PARENT,
+                          priv->visual->visual_id,
+                          attr_mask,
+                          attrs);
+    } else {
+        xcb_create_window(priv->conn,
+                          XCB_COPY_FROM_PARENT,
+                          priv->win,
+                          priv->winroot,
+                          0,0,100,100, /* will resize */
+                          0,
+                          XCB_WINDOW_CLASS_COPY_FROM_PARENT,
+                          priv->visual->visual_id,
+                          attr_mask,
+                          attrs);
+
+        hostx_set_win_title(pScrn,
+                            "(ctrl+shift grabs mouse and keyboard)");
+
+        if (priv->use_fullscreen) {
+            priv->win_width  = xscreen->width_in_pixels;
+            priv->win_height = xscreen->height_in_pixels;
+
+            _ephyrSetFullscreenHint(priv);
+        } else if (priv->output) {
+            hostx_get_output_geometry(pScrn,
+                                      priv->output,
+                                      &priv->win_x,
+                                      &priv->win_y,
+                                      &priv->win_width,
+                                      &priv->win_height);
+
+            priv->use_fullscreen = TRUE;
+            _ephyrSetFullscreenHint(priv);
+        }
+
+        tmpstr = getenv("RESOURCE_NAME");
+
+        if (tmpstr && (!ephyrResNameFromConfig)) {
+            ephyrResName = tmpstr;
+        }
+
+        class_len = strlen(ephyrResName) + 1 + strlen("Xorg") + 1;
+        class_hint = malloc(class_len);
+
+        if (class_hint) {
+            strcpy(class_hint, ephyrResName);
+            strcpy(class_hint + strlen(ephyrResName) + 1, "Xorg");
+            xcb_change_property(priv->conn,
+                                XCB_PROP_MODE_REPLACE,
+                                priv->win,
+                                XCB_ATOM_WM_CLASS,
+                                XCB_ATOM_STRING,
+                                8,
+                                class_len,
+                                class_hint);
+            free(class_hint);
+        }
+    }
+
+    if (!hostx_want_host_cursor(pScrn)) {
+        /* Ditch the cursor, we provide our 'own' */
+        xcb_change_window_attributes(priv->conn,
+                                     priv->win,
+                                     XCB_CW_CURSOR,
+                                     &priv->empty_cursor);
+    }
+/********************* hostx_init_window *************/
+
 
     /* TODO: replace with corresponding Xephyr function.
       if (!ephyrClientValidDepth(pScrn->depth)) {
