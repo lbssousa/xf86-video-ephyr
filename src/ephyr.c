@@ -1283,6 +1283,12 @@ _ephyrSetFullscreenHint(EphyrPrivatePtr priv) {
                         &atom_WINDOW_STATE_FULLSCREEN);
 }
 
+static Bool
+_ephyrCheckExtension(EphyrPrivatePtr priv, xcb_extension_t *extension) {
+    const xcb_query_extension_reply_t *rep = xcb_get_extension_data(priv->conn,
+                                                                    extension);
+    return rep && rep->present;
+}
 
 /* Data from here is valid to all server generations */
 static Bool
@@ -1507,7 +1513,7 @@ ephyrPreInit(ScrnInfoPtr pScrn, int flags) {
     }*/
 
     /* Try to get share memory ximages for a little bit more speed */
-    if (!hostx_has_extension(pScrn, &xcb_shm_id) || getenv("XEPHYR_NO_SHM")) {
+    if (!_ephyrCheckExtension(priv, &xcb_shm_id) || getenv("XEPHYR_NO_SHM")) {
         fprintf(stderr, "\nNested Xorg unable to use SHM XImages\n");
         priv->have_shm = FALSE;
     } else {

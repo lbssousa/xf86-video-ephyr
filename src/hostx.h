@@ -73,7 +73,6 @@ void *hostx_screen_init(ScrnInfoPtr pScrn,
 void hostx_paint_rect(ScrnInfoPtr pScrn,
                       int sx, int sy, int dx, int dy, int width, int height);
 int hostx_get_screen(ScrnInfoPtr pScrn);
-int hostx_has_extension(ScrnInfoPtr pScrn, xcb_extension_t *extension);
 int hostx_get_fd(ScrnInfoPtr pScrn);
 
 #endif /*_XLIBS_STUFF_H_*/

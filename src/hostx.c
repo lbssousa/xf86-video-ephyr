@@ -74,13 +74,6 @@ extern const char *ephyrResName;
 extern Bool ephyrResNameFromConfig;
 extern xcb_intern_atom_cookie_t cookie_WINDOW_STATE,
                                 cookie_WINDOW_STATE_FULLSCREEN;
-Bool
-hostx_has_extension(ScrnInfoPtr pScrn, xcb_extension_t *extension) {
-    EphyrPrivatePtr priv = pScrn->driverPrivate;
-    const xcb_query_extension_reply_t *rep = xcb_get_extension_data(priv->conn,
-                                                                    extension);
-    return rep && rep->present;
-}
 
 static void hostx_set_fullscreen_hint(ScrnInfoPtr pScrn);
 
