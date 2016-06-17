@@ -32,6 +32,7 @@
 #include <xcb/xcb.h>
 #include <xcb/xcb_aux.h>
 #include <xcb/xcb_icccm.h>
+#include <xcb/randr.h>
 
 #include "ephyr.h"
 #include "hostx.h"
@@ -1329,6 +1330,116 @@ _ephyrSetWinTitle(EphyrPrivatePtr priv, const char *extra_text) {
     }
 }
 
+static Bool
+_ephyrGetOutputGeometry(EphyrPrivatePtr priv) {
+    Bool output_found = FALSE;
+
+    if (priv->output != NULL) {
+        int i, name_len = 0;
+        char *name = NULL;
+        xcb_generic_error_t *error;
+        xcb_randr_query_version_cookie_t version_c;
+        xcb_randr_query_version_reply_t *version_r;
+        xcb_randr_get_screen_resources_cookie_t screen_resources_c;
+        xcb_randr_get_screen_resources_reply_t *screen_resources_r;
+        xcb_randr_output_t *randr_outputs;
+        xcb_randr_get_output_info_cookie_t output_info_c;
+        xcb_randr_get_output_info_reply_t *output_info_r;
+        xcb_randr_get_crtc_info_cookie_t crtc_info_c;
+        xcb_randr_get_crtc_info_reply_t *crtc_info_r;
+
+        /* First of all, check for extension */
+        if (!_ephyrCheckExtension(priv, &xcb_randr_id)) {
+            return FALSE;
+        }
+
+        /* Check RandR version */
+        version_c = xcb_randr_query_version(priv->conn, 1, 2);
+        version_r = xcb_randr_query_version_reply(priv->conn,
+                                                  version_c,
+                                                  &error);
+
+        if (error != NULL || version_r == NULL) {
+            return FALSE;
+        } else if (version_r->major_version < 1 ||
+                   (version_r->major_version == 1 && version_r->minor_version < 2)) {
+            free(version_r);
+            return FALSE;
+        }
+
+        free(version_r);
+
+        /* Get list of outputs from screen resources */
+        screen_resources_c = xcb_randr_get_screen_resources(priv->conn,
+                                                            priv->winroot);
+        screen_resources_r = xcb_randr_get_screen_resources_reply(priv->conn,
+                                                                  screen_resources_c,
+                                                                  NULL);
+        randr_outputs = xcb_randr_get_screen_resources_outputs(screen_resources_r);
+
+        for (i = 0; !output_found && i < screen_resources_r->num_outputs; i++) {
+            /* Get info on the output */
+            output_info_c = xcb_randr_get_output_info(priv->conn,
+                                                      randr_outputs[i],
+                                                      XCB_CURRENT_TIME);
+            output_info_r = xcb_randr_get_output_info_reply(priv->conn,
+                                                            output_info_c,
+                                                            NULL);
+
+            /* Get output name */
+            name_len = xcb_randr_get_output_info_name_length(output_info_r);
+            name = malloc(name_len + 1);
+            strncpy(name, (char*)xcb_randr_get_output_info_name(output_info_r), name_len);
+            name[name_len] = '\0';
+
+            if (!strcmp(name, priv->output)) {
+                output_found = TRUE;
+
+                /* Check if output is connected */
+                if (output_info_r->crtc == XCB_NONE) {
+                    free(name);
+                    free(output_info_r);
+                    free(screen_resources_r);
+                    return FALSE;
+                }
+
+                /* Get CRTC from output info */
+                crtc_info_c = xcb_randr_get_crtc_info(priv->conn,
+                                                      output_info_r->crtc,
+                                                      XCB_CURRENT_TIME);
+                crtc_info_r = xcb_randr_get_crtc_info_reply(priv->conn,
+                                                            crtc_info_c,
+                                                            NULL);
+
+                /* Get CRTC geometry */
+                priv->win_x = crtc_info_r->x;
+                priv->win_y = crtc_info_r->y;
+                priv->win_width = crtc_info_r->width;
+                priv->win_height = crtc_info_r->height;
+
+                priv->win_explicit_position = TRUE;
+                free(crtc_info_r);
+            }
+
+            free(name);
+            free(output_info_r);
+        }
+
+        free(screen_resources_r);
+    } else if (priv->use_fullscreen) {
+        xcb_screen_t *xscreen = xcb_aux_get_screen(priv->conn, priv->screen);
+        priv->win_width = xscreen->width_in_pixels;
+        priv->win_height = xscreen->height_in_pixels;
+        output_found = TRUE;
+    }
+
+    if (output_found) {
+        _ephyrSetFullscreenHint(priv);
+    }
+
+    return output_found;
+}
+
 /* Data from here is valid to all server generations */
 static Bool
 ephyrPreInit(ScrnInfoPtr pScrn, int flags) {
@@ -1681,23 +1792,6 @@ ephyrPreInit(ScrnInfoPtr pScrn, int flags) {
         _ephyrSetWinTitle(priv,
                           "(ctrl+shift grabs mouse and keyboard)");
 
-        if (priv->use_fullscreen) {
-            priv->win_width  = xscreen->width_in_pixels;
-            priv->win_height = xscreen->height_in_pixels;
-
-            _ephyrSetFullscreenHint(priv);
-        } else if (priv->output) {
-            hostx_get_output_geometry(pScrn,
-                                      priv->output,
-                                      &priv->win_x,
-                                      &priv->win_y,
-                                      &priv->win_width,
-                                      &priv->win_height);
-
-            priv->use_fullscreen = TRUE;
-            _ephyrSetFullscreenHint(priv);
-        }
-
         tmpstr = getenv("RESOURCE_NAME");
 
         if (tmpstr && (!ephyrResNameFromConfig)) {
@@ -1738,6 +1832,15 @@ ephyrPreInit(ScrnInfoPtr pScrn, int flags) {
             pScrn->depth);
       return FALSE;
       }*/
+
+    if (_ephyrGetOutputGeometry(priv)) {
+        if (!ephyrAddMode(pScrn, priv->win_width, priv->win_height)) {
+            xf86DrvMsg(pScrn->scrnIndex,
+                       X_WARNING,
+                       "Failed to get fullscreen dimensions for display %s. Skipping.\n",
+                       displayName);
+        }
+    }
 
     if (ephyrValidateModes(pScrn) < 1) {
         xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "No valid modes\n");

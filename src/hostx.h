@@ -45,10 +45,6 @@ int hostx_want_screen_geometry(ScrnInfoPtr pScrn,
                                unsigned int *width, unsigned int *height,
                                int *x, int *y);
 xcb_cursor_t hostx_get_empty_cursor(ScrnInfoPtr pScrn);
-void hostx_get_output_geometry(ScrnInfoPtr pScrn,
-                               const char *output,
-                               int *x, int *y,
-                               unsigned int *width, unsigned int *height);
 int hostx_want_preexisting_window(ScrnInfoPtr pScrn);
 void hostx_use_preexisting_window(unsigned long win_id);
 void hostx_set_title(const char *name);
