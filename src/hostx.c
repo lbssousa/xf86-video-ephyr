@@ -672,12 +672,6 @@ hostx_get_screen(ScrnInfoPtr pScrn) {
     return priv->screen;
 }
 
-int
-hostx_get_fd(ScrnInfoPtr pScrn) {
-    EphyrPrivatePtr priv = pScrn->driverPrivate;
-    return xcb_get_file_descriptor(priv->conn);
-}
-
 #ifdef GLAMOR
 Bool
 ephyr_glamor_init(ScreenPtr pScreen) {

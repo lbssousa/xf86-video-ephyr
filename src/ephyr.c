@@ -1883,7 +1883,7 @@ ephyrCloseScreen(CLOSE_SCREEN_ARGS_DECL) {
                                  ephyrWakeupHandler,
                                  pScrn);
 #else
-    RemoveNotifyFd(hostx_get_fd());
+    RemoveNotifyFd(xcb_get_file_descriptor(priv->conn));
 #endif
 
     hostx_close_screen(pScrn);
@@ -1956,7 +1956,8 @@ ephyrScreenInit(SCREEN_INIT_ARGS_DECL) {
                                    ephyrWakeupHandler,
                                    pScrn);
 #else
-    SetNotifyFd(hostx_get_fd(), ephyrXcbNotify, X_NOTIFY_READ, NULL);
+    SetNotifyFd(xcb_get_file_descriptor(priv->conn),
+                ephyrXcbNotify, X_NOTIFY_READ, NULL);
 #endif
 
     return TRUE;
