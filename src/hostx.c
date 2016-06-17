@@ -67,7 +67,7 @@ static int HostXWantDamageDebug = 0;
 
 extern Bool EphyrWantResize;
 
-const char *ephyrTitle = NULL;
+extern const char *ephyrTitle;
 Bool ephyr_glamor = FALSE;
 
 extern const char *ephyrResName;
@@ -111,40 +111,6 @@ hostx_set_screen_number(ScrnInfoPtr pScrn, int number) {
     if (priv) {
         priv->mynum = number;
         hostx_set_win_title(pScrn, "");
-    }
-}
-
-void
-hostx_set_win_title(ScrnInfoPtr pScrn, const char *extra_text) {
-    EphyrPrivatePtr priv = pScrn->driverPrivate;
-
-    if (!priv) {
-        return;
-    }
-
-    if (ephyrTitle) {
-        xcb_icccm_set_wm_name(priv->conn,
-                              priv->win,
-                              XCB_ATOM_STRING,
-                              8,
-                              strlen(ephyrTitle),
-                              ephyrTitle);
-    } else {
-#define BUF_LEN 256
-        char buf[BUF_LEN + 1];
-
-        memset(buf, 0, BUF_LEN + 1);
-        snprintf(buf, BUF_LEN, "Xorg on %s.%d %s",
-                 priv->server_dpy_name ? priv->server_dpy_name : ":0",
-                 priv->mynum, (extra_text != NULL) ? extra_text : "");
-
-        xcb_icccm_set_wm_name(priv->conn,
-                              priv->win,
-                              XCB_ATOM_STRING,
-                              8,
-                              strlen(buf),
-                              buf);
-        xcb_flush(priv->conn);
     }
 }
 

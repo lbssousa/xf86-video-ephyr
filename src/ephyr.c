@@ -31,6 +31,7 @@
 
 #include <xcb/xcb.h>
 #include <xcb/xcb_aux.h>
+#include <xcb/xcb_icccm.h>
 
 #include "ephyr.h"
 #include "hostx.h"
@@ -90,6 +91,7 @@ Bool EphyrWantGrayScale = 0;
 Bool EphyrWantResize = 0;
 Bool EphyrWantNoHostGrab = 0;
 
+const char *ephyrTitle = NULL;
 const char *ephyrResName = NULL;
 Bool ephyrResNameFromConfig = FALSE;
 
@@ -646,17 +648,19 @@ ephyrCreateColormap(ColormapPtr pmap) {
     return fbInitializeColormap(pmap);
 }
 
+#if 0
 Bool
 ephyrInitScreen(ScreenPtr pScreen) {
     ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
+    EphyrPrivatePtr priv = pScrn->driverPrivate;
 
     EPHYR_LOG("pScreen->myNum:%d\n", pScreen->myNum);
     hostx_set_screen_number(pScrn, pScreen->myNum);
 
     if (EphyrWantNoHostGrab) {
-        hostx_set_win_title(pScrn, "xephyr");
+        _ephyrSetWinTitle(priv, "xephyr");
     } else {
-        hostx_set_win_title(pScrn, "(ctrl+shift grabs mouse and keyboard)");
+        _ephyrSetWinTitle(priv, "(ctrl+shift grabs mouse and keyboard)");
     }
 
     pScreen->CreateColormap = ephyrCreateColormap;
@@ -675,6 +679,7 @@ ephyrInitScreen(ScreenPtr pScreen) {
 
     return TRUE;
 }
+#endif
 
 #if 0
 Bool
@@ -1290,6 +1295,38 @@ _ephyrCheckExtension(EphyrPrivatePtr priv, xcb_extension_t *extension) {
     return rep && rep->present;
 }
 
+static void
+_ephyrSetWinTitle(EphyrPrivatePtr priv, const char *extra_text) {
+    if (!priv) {
+        return;
+    }
+
+    if (ephyrTitle) {
+        xcb_icccm_set_wm_name(priv->conn,
+                              priv->win,
+                              XCB_ATOM_STRING,
+                              8,
+                              strlen(ephyrTitle),
+                              ephyrTitle);
+    } else {
+#define BUF_LEN 256
+        char buf[BUF_LEN + 1];
+
+        memset(buf, 0, BUF_LEN + 1);
+        snprintf(buf, BUF_LEN, "Xorg on %s.%d %s",
+                 priv->server_dpy_name ? priv->server_dpy_name : ":0",
+                 priv->mynum, (extra_text != NULL) ? extra_text : "");
+
+        xcb_icccm_set_wm_name(priv->conn,
+                              priv->win,
+                              XCB_ATOM_STRING,
+                              8,
+                              strlen(buf),
+                              buf);
+        xcb_flush(priv->conn);
+    }
+}
+
 /* Data from here is valid to all server generations */
 static Bool
 ephyrPreInit(ScrnInfoPtr pScrn, int flags) {
@@ -1631,8 +1668,8 @@ ephyrPreInit(ScrnInfoPtr pScrn, int flags) {
                           attr_mask,
                           attrs);
 
-        hostx_set_win_title(pScrn,
-                            "(ctrl+shift grabs mouse and keyboard)");
+        _ephyrSetWinTitle(priv,
+                          "(ctrl+shift grabs mouse and keyboard)");
 
         if (priv->use_fullscreen) {
             priv->win_width  = xscreen->width_in_pixels;
