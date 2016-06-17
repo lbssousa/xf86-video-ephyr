@@ -59,8 +59,6 @@ void hostx_get_visual_masks(ScrnInfoPtr pScrn,
                             CARD32 *rmsk, CARD32 *gmsk, CARD32 *bmsk);
 void hostx_set_cmap_entry(ScreenPtr pScreen, unsigned char idx,
                           unsigned char r, unsigned char g, unsigned char b);
-void hostx_paint_rect(ScrnInfoPtr pScrn,
-                      int sx, int sy, int dx, int dy, int width, int height);
 int hostx_get_screen(ScrnInfoPtr pScrn);
 
 #endif /*_XLIBS_STUFF_H_*/

@@ -63,7 +63,7 @@
 #include "ephyrlog.h"
 #include "ephyr.h"
 
-static int HostXWantDamageDebug = 0;
+extern int HostXWantDamageDebug = 0;
 
 extern Bool EphyrWantResize;
 
@@ -236,140 +236,6 @@ hostx_set_cmap_entry(ScreenPtr pScreen, unsigned char idx,
     priv->cmap[idx] = ((r << rshift) & priv->visual->red_mask)   |
                       ((g << gshift) & priv->visual->green_mask) |
                       ((b << bshift) & priv->visual->blue_mask);
-}
-
-static void hostx_paint_debug_rect(ScrnInfoPtr pScrn,
-                                   int x, int y, int width, int height);
-
-void
-hostx_paint_rect(ScrnInfoPtr pScrn,
-                 int sx, int sy, int dx, int dy, int width, int height) {
-    EphyrPrivatePtr priv = pScrn->driverPrivate;
-    EPHYR_DBG("painting in screen %d\n", priv->mynum);
-
-#ifdef GLAMOR
-    if (ephyr_glamor) {
-        BoxRec box;
-        RegionRec region;
-
-        box.x1 = dx;
-        box.y1 = dy;
-        box.x2 = dx + width;
-        box.y2 = dy + height;
-
-        RegionInit(&region, &box, 1);
-        ephyr_glamor_damage_redisplay(priv->glamor, &region);
-        RegionUninit(&region);
-        return;
-    }
-#endif
-
-    /*
-     *  Copy the image data updated by the shadow layer
-     *  on to the window
-     */
-    if (HostXWantDamageDebug) {
-        hostx_paint_debug_rect(pScrn, dx, dy, width, height);
-    }
-
-    /*
-     * If the depth of the ephyr server is less than that of the host,
-     * the kdrive fb does not point to the ximage data but to a buffer
-     * ( fb_data ), we shift the various bits from this onto the XImage
-     * so they match the host.
-     *
-     * Note, This code is pretty new ( and simple ) so may break on
-     *       endian issues, 32 bpp host etc.
-     *       Not sure if 8bpp case is right either.
-     *       ... and it will be slower than the matching depth case.
-     */
-
-    if (!host_depth_matches_server(priv)) {
-        int x, y, idx, bytes_per_pixel = (priv->server_depth >> 3);
-        int stride = (priv->win_width * bytes_per_pixel + 0x3) & ~0x3;
-        unsigned char r, g, b;
-        unsigned long host_pixel;
-
-        EPHYR_DBG("Unmatched host depth priv=%p\n", priv);
-        for (y = sy; y < sy + height; y++) {
-            for (x = sx; x < sx + width; x++) {
-                idx = y * stride + x * bytes_per_pixel;
-
-                switch (priv->server_depth) {
-                case 16:
-                {
-                    unsigned short pixel =
-                        *(unsigned short *) (priv->fb_data + idx);
-
-                    r = ((pixel & 0xf800) >> 8);
-                    g = ((pixel & 0x07e0) >> 3);
-                    b = ((pixel & 0x001f) << 3);
-
-                    host_pixel = (r << 16) | (g << 8) | (b);
-
-                    xcb_image_put_pixel(priv->ximg, x, y, host_pixel);
-                    break;
-                }
-                case 8:
-                {
-                    unsigned char pixel =
-                        *(unsigned char *) (priv->fb_data + idx);
-                    xcb_image_put_pixel(priv->ximg, x, y,
-                                        priv->cmap[pixel]);
-                    break;
-                }
-                default:
-                    break;
-                }
-            }
-        }
-    }
-
-    if (priv->have_shm) {
-        xcb_image_shm_put(priv->conn, priv->win,
-                          priv->gc, priv->ximg,
-                          priv->shminfo,
-                          sx, sy, dx, dy, width, height, FALSE);
-    } else {
-        xcb_image_t *subimg = xcb_image_subimage(priv->ximg, sx, sy,
-                                                 width, height, 0, 0, 0);
-        xcb_image_t *img = xcb_image_native(priv->conn, subimg, 1);
-        xcb_image_put(priv->conn, priv->win, priv->gc, img, dx, dy, 0);
-
-        if (subimg != img) {
-            xcb_image_destroy(img);
-        }
-
-        xcb_image_destroy(subimg);
-    }
-
-    xcb_aux_sync(priv->conn);
-}
-
-static void
-hostx_paint_debug_rect(ScrnInfoPtr pScrn,
-                       int x, int y, int width, int height) {
-    EphyrPrivatePtr priv = pScrn->driverPrivate;
-    struct timespec tspec;
-    xcb_rectangle_t rect = { .x = x, .y = y, .width = width, .height = height };
-    xcb_void_cookie_t cookie;
-    xcb_generic_error_t *e;
-
-    tspec.tv_sec = priv->damage_debug_msec / (1000000);
-    tspec.tv_nsec = (priv->damage_debug_msec % 1000000) * 1000;
-
-    EPHYR_DBG("msec: %li tv_sec %li, tv_msec %li",
-              priv->damage_debug_msec, tspec.tv_sec, tspec.tv_nsec);
-
-    /* fprintf(stderr, "Xephyr updating: %i+%i %ix%i\n", x, y, width, height); */
-
-    cookie = xcb_poly_fill_rectangle_checked(priv->conn, priv->win,
-                                             priv->gc, 1, &rect);
-    e = xcb_request_check(priv->conn, cookie);
-    free(e);
-
-    /* nanosleep seems to work better than usleep for me... */
-    nanosleep(&tspec, NULL);
 }
 
 int
