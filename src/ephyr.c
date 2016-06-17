@@ -1886,7 +1886,18 @@ ephyrCloseScreen(CLOSE_SCREEN_ARGS_DECL) {
     RemoveNotifyFd(xcb_get_file_descriptor(priv->conn));
 #endif
 
-    hostx_close_screen(pScrn);
+    if (priv->have_shm) {
+        xcb_shm_detach(priv->conn, priv->shminfo.shmseg);
+        shmdt(priv->shminfo.shmaddr);
+        shmctl(priv->shminfo.shmid, IPC_RMID, 0);
+    } else {
+        free(priv->ximg->data);
+        priv->ximg->data = NULL;
+    }
+
+    xcb_image_destroy(priv->ximg);
+    priv->ximg = NULL;
+
     pScreen->CloseScreen = priv->CloseScreen;
     return (*pScreen->CloseScreen)(CLOSE_SCREEN_ARGS);
 }

@@ -63,7 +63,6 @@ void hostx_get_visual_masks(ScrnInfoPtr pScrn,
                             CARD32 *rmsk, CARD32 *gmsk, CARD32 *bmsk);
 void hostx_set_cmap_entry(ScreenPtr pScreen, unsigned char idx,
                           unsigned char r, unsigned char g, unsigned char b);
-void hostx_close_screen(ScrnInfoPtr pScrn);
 void *hostx_screen_init(ScrnInfoPtr pScrn,
                         int x, int y,
                         int width, int height, int buffer_height,
