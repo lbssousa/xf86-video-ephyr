@@ -1253,12 +1253,9 @@ _ephyrUseResname(const char *name, Bool fromconfig) {
 /* Data from here is valid to all server generations */
 static Bool
 ephyrPreInit(ScrnInfoPtr pScrn, int flags) {
+    EphyrPrivatePtr priv;
     const char *displayName = getenv("DISPLAY");
     const char *accelMethod = NULL;
-    const char *output = NULL;
-    unsigned long parent = 0;
-    EphyrPrivatePtr priv = pScrn->driverPrivate;
-    Bool fullscreen = FALSE;
     Bool noAccel = FALSE;
 
     xf86DrvMsg(pScrn->scrnIndex, X_INFO, "ephyrPreInit\n");
@@ -1270,6 +1267,12 @@ ephyrPreInit(ScrnInfoPtr pScrn, int flags) {
     if (!ephyrAllocatePrivate(pScrn)) {
         xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "Failed to allocate private\n");
         return FALSE;
+    } else {
+        priv = pScrn->driverPrivate;
+        priv->output = NULL;
+        priv->use_fullscreen = FALSE;
+        priv->win_pre_existing = 0;
+        priv->win_explicit_position = FALSE;
     }
 
     if (!xf86SetDepthBpp(pScrn, 0, 0, 0, Support24bppFb | Support32bppFb)) {
@@ -1341,11 +1344,11 @@ ephyrPreInit(ScrnInfoPtr pScrn, int flags) {
     }
 #endif
 
-    if (xf86GetOptValULong(EphyrOptions,
-                           OPTION_PARENTWINDOW,
-                           &parent)) {
-        xf86DrvMsg(pScrn->scrnIndex, X_INFO, "Targeting parent window 0x%lx\n",
-                   parent);
+    if (xf86GetOptValInteger(EphyrOptions,
+                             OPTION_PARENTWINDOW,
+                             &priv->win_pre_existing)) {
+        xf86DrvMsg(pScrn->scrnIndex, X_INFO, "Targeting parent window 0x%x\n",
+                   priv->win_pre_existing);
     }
 
     if (xf86GetOptValBool(EphyrOptions,
@@ -1357,15 +1360,18 @@ ephyrPreInit(ScrnInfoPtr pScrn, int flags) {
     }
 
     if (xf86IsOptionSet(EphyrOptions, OPTION_OUTPUT)) {
-        output = xf86GetOptValString(EphyrOptions,
-                                     OPTION_OUTPUT);
+        priv->output = xf86GetOptValString(EphyrOptions,
+                                           OPTION_OUTPUT);
         xf86DrvMsg(pScrn->scrnIndex, X_INFO,
                    "Targeting host X server output \"%s\"\n",
-                   output);
+                   priv->output);
     }
 
     xf86ShowUnusedOptions(pScrn->scrnIndex, pScrn->options);
-    hostx_add_screen(pScrn, parent, pScrn->scrnIndex, FALSE, output);
+
+    if (pScrn->frameX0 * pScrn->frameY0 != 0) {
+        priv->win_explicit_position = TRUE;
+    }
 
     if (hostx_get_xcbconn(pScrn) != NULL) {
         xf86DrvMsg(pScrn->scrnIndex, X_INFO,

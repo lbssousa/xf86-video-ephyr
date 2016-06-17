@@ -57,8 +57,6 @@ void hostx_set_title(const char *name);
 void hostx_handle_signal(int signum);
 Bool hostx_init(ScrnInfoPtr pScrn);
 Bool hostx_init_window(ScrnInfoPtr pScrn);
-void hostx_add_screen(ScrnInfoPtr pScrn, unsigned long win_id,
-                      int screen_num, Bool use_geometry, const char *output);
 void hostx_set_display_name(ScrnInfoPtr pScrn, const char *name);
 void hostx_set_screen_number(ScrnInfoPtr pScrn, int number);
 void hostx_set_win_title(ScrnInfoPtr pScrn, const char *extra_text);

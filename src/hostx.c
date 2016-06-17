@@ -103,26 +103,6 @@ hostx_want_screen_geometry(ScrnInfoPtr pScrn,
     return 0;
 }
 
-/* TODO: This function should be merged with driver's PreInit(). */
-void
-hostx_add_screen(ScrnInfoPtr pScrn, unsigned long win_id, int screen_num,
-                 Bool use_geometry, const char *output) {
-    EphyrPrivatePtr priv = pScrn->driverPrivate;
-#if 0
-    int index = priv->n_screens;
-
-    priv->n_screens += 1;
-    priv->screens = reallocarray(priv->screens,
-                                 priv->n_screens, sizeof(priv->screens[0]));
-    priv->screens[index] = pScrn;
-#endif
-
-    priv->pScrn = pScrn;
-    priv->win_pre_existing = win_id;
-    priv->win_explicit_position = use_geometry;
-    priv->output = output;
-}
-
 void
 hostx_set_display_name(ScrnInfoPtr pScrn, const char *name) {
     EphyrPrivatePtr priv = pScrn->driverPrivate;
