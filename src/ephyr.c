@@ -1323,7 +1323,7 @@ ephyrValidateModes(ScrnInfoPtr pScrn) {
                 return 0;
             }
         }
-    } else {
+    } else if (!pScrn->modes) {
         if (!ephyrAddMode(pScrn, 640, 480)) {
             return 0;
         }
