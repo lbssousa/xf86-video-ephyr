@@ -27,6 +27,13 @@
 #include "config.h"
 #endif
 
+#include <sys/shm.h>
+
+#include <xcb/xcb.h>
+#include <xcb/xcb_aux.h>
+#include <xcb/xcb_icccm.h>
+#include <xcb/randr.h>
+
 #include "ephyr.h"
 #include "hostx.h"
 
@@ -70,6 +77,8 @@
 
 #define TIMER_CALLBACK_INTERVAL 20
 
+#define HOST_DEPTH_MATCHES_SERVER(_vars) (priv->depth == (_vars)->server_depth)
+
 /* End of driver.c includes
  ******************************************************
  * Beginning of former ephyr.c */
@@ -80,10 +89,18 @@ Bool ephyrNoXV = FALSE;
 
 static int mouseState = 0;
 static Rotation ephyrRandr = RR_Rotate_0;
+static int HostXWantDamageDebug = 0;
 
 Bool EphyrWantGrayScale = 0;
 Bool EphyrWantResize = 0;
 Bool EphyrWantNoHostGrab = 0;
+
+const char *ephyrTitle = NULL;
+const char *ephyrResName = NULL;
+Bool ephyrResNameFromConfig = FALSE;
+
+static xcb_intern_atom_cookie_t cookie_WINDOW_STATE,
+                                cookie_WINDOW_STATE_FULLSCREEN;
 
 #if 0
 Bool
@@ -312,6 +329,135 @@ ephyrUnmapFramebuffer(ScrnInfoPtr pScrn) {
 #endif
 
 static void
+_ephyrPaintDebugRect(EphyrPrivatePtr priv,
+                     int x, int y, int width, int height) {
+   struct timespec tspec;
+   xcb_rectangle_t rect = { .x = x, .y = y, .width = width, .height = height };
+   xcb_void_cookie_t cookie;
+   xcb_generic_error_t *e;
+
+   tspec.tv_sec = priv->damage_debug_msec / (1000000);
+   tspec.tv_nsec = (priv->damage_debug_msec % 1000000) * 1000;
+
+   EPHYR_DBG("msec: %li tv_sec %li, tv_msec %li",
+             priv->damage_debug_msec, tspec.tv_sec, tspec.tv_nsec);
+
+   /* fprintf(stderr, "Xephyr updating: %i+%i %ix%i\n", x, y, width, height); */
+
+   cookie = xcb_poly_fill_rectangle_checked(priv->conn, priv->win,
+                                            priv->gc, 1, &rect);
+   e = xcb_request_check(priv->conn, cookie);
+   free(e);
+
+   /* nanosleep seems to work better than usleep for me... */
+   nanosleep(&tspec, NULL);
+}
+
+static void
+_ephyrPaintRect(EphyrPrivatePtr priv,
+                int sx, int sy, int dx, int dy, int width, int height) {
+    EPHYR_DBG("painting in screen %d\n", priv->mynum);
+
+#ifdef GLAMOR
+    if (ephyr_glamor) {
+        BoxRec box;
+        RegionRec region;
+
+        box.x1 = dx;
+        box.y1 = dy;
+        box.x2 = dx + width;
+        box.y2 = dy + height;
+
+        RegionInit(&region, &box, 1);
+        ephyr_glamor_damage_redisplay(priv->glamor, &region);
+        RegionUninit(&region);
+        return;
+    }
+#endif
+
+    /*
+     *  Copy the image data updated by the shadow layer
+     *  on to the window
+     */
+    if (HostXWantDamageDebug) {
+        _ephyrPaintDebugRect(priv, dx, dy, width, height);
+    }
+
+    /*
+     * If the depth of the ephyr server is less than that of the host,
+     * the kdrive fb does not point to the ximage data but to a buffer
+     * ( fb_data ), we shift the various bits from this onto the XImage
+     * so they match the host.
+     *
+     * Note, This code is pretty new ( and simple ) so may break on
+     *       endian issues, 32 bpp host etc.
+     *       Not sure if 8bpp case is right either.
+     *       ... and it will be slower than the matching depth case.
+     */
+
+    if (!HOST_DEPTH_MATCHES_SERVER(priv)) {
+        int x, y, idx, bytes_per_pixel = (priv->server_depth >> 3);
+        int stride = (priv->win_width * bytes_per_pixel + 0x3) & ~0x3;
+        unsigned char r, g, b;
+        unsigned long host_pixel;
+
+        EPHYR_DBG("Unmatched host depth priv=%p\n", priv);
+        for (y = sy; y < sy + height; y++) {
+            for (x = sx; x < sx + width; x++) {
+                idx = y * stride + x * bytes_per_pixel;
+
+                switch (priv->server_depth) {
+                case 16:
+                {
+                    unsigned short pixel =
+                        *(unsigned short *) (priv->fb_data + idx);
+
+                    r = ((pixel & 0xf800) >> 8);
+                    g = ((pixel & 0x07e0) >> 3);
+                    b = ((pixel & 0x001f) << 3);
+
+                    host_pixel = (r << 16) | (g << 8) | (b);
+
+                    xcb_image_put_pixel(priv->ximg, x, y, host_pixel);
+                    break;
+                }
+                case 8:
+                {
+                    unsigned char pixel =
+                        *(unsigned char *) (priv->fb_data + idx);
+                    xcb_image_put_pixel(priv->ximg, x, y,
+                                        priv->cmap[pixel]);
+                    break;
+                }
+                default:
+                    break;
+                }
+            }
+        }
+    }
+
+    if (priv->have_shm) {
+        xcb_image_shm_put(priv->conn, priv->win,
+                          priv->gc, priv->ximg,
+                          priv->shminfo,
+                          sx, sy, dx, dy, width, height, FALSE);
+    } else {
+        xcb_image_t *subimg = xcb_image_subimage(priv->ximg, sx, sy,
+                                                 width, height, 0, 0, 0);
+        xcb_image_t *img = xcb_image_native(priv->conn, subimg, 1);
+        xcb_image_put(priv->conn, priv->win, priv->gc, img, dx, dy, 0);
+
+        if (subimg != img) {
+            xcb_image_destroy(img);
+        }
+
+        xcb_image_destroy(subimg);
+    }
+
+    xcb_aux_sync(priv->conn);
+}
+
+static void
 ephyrInternalDamageRedisplay(ScreenPtr pScreen) {
     ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
     EphyrPrivatePtr priv = pScrn->driverPrivate;
@@ -334,7 +480,7 @@ ephyrInternalDamageRedisplay(ScreenPtr pScreen) {
             pbox = RegionRects(pRegion);
 
             while (nbox--) {
-                hostx_paint_rect(pScrn,
+                _ephyrPaintRect(priv,
                          pbox->x1, pbox->y1,
                          pbox->x1, pbox->y1,
                          pbox->x2 - pbox->x1, pbox->y2 - pbox->y1);
@@ -635,17 +781,19 @@ ephyrCreateColormap(ColormapPtr pmap) {
     return fbInitializeColormap(pmap);
 }
 
+#if 0
 Bool
 ephyrInitScreen(ScreenPtr pScreen) {
     ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
+    EphyrPrivatePtr priv = pScrn->driverPrivate;
 
     EPHYR_LOG("pScreen->myNum:%d\n", pScreen->myNum);
     hostx_set_screen_number(pScrn, pScreen->myNum);
 
     if (EphyrWantNoHostGrab) {
-        hostx_set_win_title(pScrn, "xephyr");
+        _ephyrSetWinTitle(priv, "xephyr");
     } else {
-        hostx_set_win_title(pScrn, "(ctrl+shift grabs mouse and keyboard)");
+        _ephyrSetWinTitle(priv, "(ctrl+shift grabs mouse and keyboard)");
     }
 
     pScreen->CreateColormap = ephyrCreateColormap;
@@ -664,6 +812,7 @@ ephyrInitScreen(ScreenPtr pScreen) {
 
     return TRUE;
 }
+#endif
 
 #if 0
 Bool
@@ -827,9 +976,9 @@ ephyrProcessExpose(xcb_generic_event_t *xev) {
     }
 
     if (priv) {
-        hostx_paint_rect(pScrn, 0, 0, 0, 0,
-                         priv->win_width,
-                         priv->win_height);
+        _ephyrPaintRect(priv, 0, 0, 0, 0,
+                        priv->win_width,
+                        priv->win_height);
     } else {
         EPHYR_LOG_ERROR("failed to get host screen\n");
     }
@@ -881,10 +1030,10 @@ ephyrPoll(ScrnInfoPtr pScrn) {
 ephyrXcbNotify(int fd, int ready, void *data) {
     ScrnInfoPtr pScrn = data;
 #endif
-    xcb_connection_t *conn = hostx_get_xcbconn(pScrn);
+    EphyrPrivatePtr priv = pScrn->driverPrivate;
     xcb_generic_event_t *xev;
 
-    while ((xev = xcb_poll_for_event(conn)) != NULL) {
+    while ((xev = xcb_poll_for_event(priv->conn)) != NULL) {
         switch (xev->response_type & 0x7f) {
         case 0:
             ephyrProcessErrorEvent(xev);
@@ -929,7 +1078,7 @@ ephyrXcbNotify(int fd, int ready, void *data) {
     /* If our XCB connection has died (for example, our window was
      * closed), exit now.
      */
-    if (xcb_connection_has_error(conn)) {
+    if (xcb_connection_has_error(priv->conn)) {
         CloseWellKnownConnections();
         OsCleanup(1);
         exit(1);
@@ -1013,6 +1162,8 @@ typedef enum {
     OPTION_PARENTWINDOW,
     OPTION_FULLSCREEN,
     OPTION_OUTPUT,
+    OPTION_ORIGIN,
+    OPTION_SWCURSOR
 } ephyrOpts;
 
 typedef enum {
@@ -1025,16 +1176,18 @@ static SymTabRec EphyrChipsets[] = {
 };
 
 static OptionInfoRec EphyrOptions[] = {
-    { OPTION_DISPLAY,      "Display",      OPTV_STRING,   {0}, FALSE },
-    { OPTION_XAUTHORITY,   "Xauthority",   OPTV_STRING,   {0}, FALSE },
-    { OPTION_RESNAME,      "ResourceName", OPTV_STRING,   {0}, FALSE },
+    { OPTION_DISPLAY,      "Display",      OPTV_STRING,  {0}, FALSE },
+    { OPTION_XAUTHORITY,   "Xauthority",   OPTV_STRING,  {0}, FALSE },
+    { OPTION_RESNAME,      "ResourceName", OPTV_STRING,  {0}, FALSE },
 #ifdef GLAMOR
-    { OPTION_NOACCEL,      "NoAccel",      OPTV_BOOLEAN,  {0}, FALSE },
-    { OPTION_ACCELMETHOD,  "AccelMethod",  OPTV_STRING,   {0}, FALSE },
+    { OPTION_NOACCEL,      "NoAccel",      OPTV_BOOLEAN, {0}, FALSE },
+    { OPTION_ACCELMETHOD,  "AccelMethod",  OPTV_STRING,  {0}, FALSE },
 #endif
     { OPTION_PARENTWINDOW, "ParentWindow", OPTV_INTEGER, {0}, FALSE },
     { OPTION_FULLSCREEN,   "Fullscreen",   OPTV_BOOLEAN, {0}, FALSE },
     { OPTION_OUTPUT,       "Output",       OPTV_STRING,  {0}, FALSE },
+    { OPTION_ORIGIN,       "Origin",       OPTV_STRING,  {0}, FALSE },
+    { OPTION_SWCURSOR,     "SWCursor",     OPTV_BOOLEAN, {0}, FALSE },
     { -1,                  NULL,           OPTV_NONE,    {0}, FALSE }
 };
 
@@ -1241,16 +1394,205 @@ ephyrAllocatePrivate(ScrnInfoPtr pScrn) {
     return TRUE;
 }
 
+static void
+_ephyrUseResname(const char *name, Bool fromconfig) {
+    ephyrResName = name;
+    ephyrResNameFromConfig = fromconfig;
+}
+
+static void
+_ephyrSetFullscreenHint(EphyrPrivatePtr priv) {
+    xcb_atom_t atom_WINDOW_STATE, atom_WINDOW_STATE_FULLSCREEN;
+    int index;
+    xcb_intern_atom_reply_t *reply;
+
+    reply = xcb_intern_atom_reply(priv->conn, cookie_WINDOW_STATE, NULL);
+    atom_WINDOW_STATE = reply->atom;
+    free(reply);
+
+    reply = xcb_intern_atom_reply(priv->conn, cookie_WINDOW_STATE_FULLSCREEN,
+                                  NULL);
+    atom_WINDOW_STATE_FULLSCREEN = reply->atom;
+    free(reply);
+
+    xcb_change_property(priv->conn,
+                        PropModeReplace,
+                        priv->win,
+                        atom_WINDOW_STATE,
+                        XCB_ATOM_ATOM,
+                        32,
+                        1,
+                        &atom_WINDOW_STATE_FULLSCREEN);
+}
+
+static Bool
+_ephyrCheckExtension(EphyrPrivatePtr priv, xcb_extension_t *extension) {
+    const xcb_query_extension_reply_t *rep = xcb_get_extension_data(priv->conn,
+                                                                    extension);
+    return rep && rep->present;
+}
+
+static void
+_ephyrSetWinTitle(EphyrPrivatePtr priv, const char *extra_text) {
+    if (!priv) {
+        return;
+    }
+
+    if (ephyrTitle) {
+        xcb_icccm_set_wm_name(priv->conn,
+                              priv->win,
+                              XCB_ATOM_STRING,
+                              8,
+                              strlen(ephyrTitle),
+                              ephyrTitle);
+    } else {
+#define BUF_LEN 256
+        char buf[BUF_LEN + 1];
+
+        memset(buf, 0, BUF_LEN + 1);
+        snprintf(buf, BUF_LEN, "Xorg on %s.%d %s",
+                 priv->server_dpy_name ? priv->server_dpy_name : ":0",
+                 priv->mynum, (extra_text != NULL) ? extra_text : "");
+
+        xcb_icccm_set_wm_name(priv->conn,
+                              priv->win,
+                              XCB_ATOM_STRING,
+                              8,
+                              strlen(buf),
+                              buf);
+        xcb_flush(priv->conn);
+    }
+}
+
+static Bool
+_ephyrGetOutputGeometry(EphyrPrivatePtr priv) {
+    Bool output_found = FALSE;
+
+    if (priv->output != NULL) {
+        int i, name_len = 0;
+        char *name = NULL;
+        xcb_generic_error_t *error;
+        xcb_randr_query_version_cookie_t version_c;
+        xcb_randr_query_version_reply_t *version_r;
+        xcb_randr_get_screen_resources_cookie_t screen_resources_c;
+        xcb_randr_get_screen_resources_reply_t *screen_resources_r;
+        xcb_randr_output_t *randr_outputs;
+        xcb_randr_get_output_info_cookie_t output_info_c;
+        xcb_randr_get_output_info_reply_t *output_info_r;
+        xcb_randr_get_crtc_info_cookie_t crtc_info_c;
+        xcb_randr_get_crtc_info_reply_t *crtc_info_r;
+
+        /* First of all, check for extension */
+        if (!_ephyrCheckExtension(priv, &xcb_randr_id)) {
+            return FALSE;
+        }
+
+        /* Check RandR version */
+        version_c = xcb_randr_query_version(priv->conn, 1, 2);
+        version_r = xcb_randr_query_version_reply(priv->conn,
+                                                  version_c,
+                                                  &error);
+
+        if (error != NULL || version_r == NULL) {
+            return FALSE;
+        } else if (version_r->major_version < 1 ||
+                   (version_r->major_version == 1 && version_r->minor_version < 2)) {
+            free(version_r);
+            return FALSE;
+        }
+
+        free(version_r);
+
+        /* Get list of outputs from screen resources */
+        screen_resources_c = xcb_randr_get_screen_resources(priv->conn,
+                                                            priv->winroot);
+        screen_resources_r = xcb_randr_get_screen_resources_reply(priv->conn,
+                                                                  screen_resources_c,
+                                                                  NULL);
+        randr_outputs = xcb_randr_get_screen_resources_outputs(screen_resources_r);
+
+        for (i = 0; !output_found && i < screen_resources_r->num_outputs; i++) {
+            /* Get info on the output */
+            output_info_c = xcb_randr_get_output_info(priv->conn,
+                                                      randr_outputs[i],
+                                                      XCB_CURRENT_TIME);
+            output_info_r = xcb_randr_get_output_info_reply(priv->conn,
+                                                            output_info_c,
+                                                            NULL);
+
+            /* Get output name */
+            name_len = xcb_randr_get_output_info_name_length(output_info_r);
+            name = malloc(name_len + 1);
+            strncpy(name, (char*)xcb_randr_get_output_info_name(output_info_r), name_len);
+            name[name_len] = '\0';
+
+            if (!strcmp(name, priv->output)) {
+                output_found = TRUE;
+
+                /* Check if output is connected */
+                if (output_info_r->crtc == XCB_NONE) {
+                    free(name);
+                    free(output_info_r);
+                    free(screen_resources_r);
+                    return FALSE;
+                }
+
+                /* Get CRTC from output info */
+                crtc_info_c = xcb_randr_get_crtc_info(priv->conn,
+                                                      output_info_r->crtc,
+                                                      XCB_CURRENT_TIME);
+                crtc_info_r = xcb_randr_get_crtc_info_reply(priv->conn,
+                                                            crtc_info_c,
+                                                            NULL);
+
+                /* Get CRTC geometry */
+                priv->win_x = crtc_info_r->x;
+                priv->win_y = crtc_info_r->y;
+                priv->win_width = crtc_info_r->width;
+                priv->win_height = crtc_info_r->height;
+
+                priv->win_explicit_position = TRUE;
+                free(crtc_info_r);
+            }
+
+            free(name);
+            free(output_info_r);
+        }
+
+        free(screen_resources_r);
+    } else if (priv->use_fullscreen) {
+        xcb_screen_t *xscreen = xcb_aux_get_screen(priv->conn, priv->screen);
+        priv->win_width = xscreen->width_in_pixels;
+        priv->win_height = xscreen->height_in_pixels;
+        output_found = TRUE;
+    }
+
+    if (output_found) {
+        _ephyrSetFullscreenHint(priv);
+    }
+
+    return output_found;
+}
+
 /* Data from here is valid to all server generations */
 static Bool
 ephyrPreInit(ScrnInfoPtr pScrn, int flags) {
+    EphyrPrivatePtr priv;
     const char *displayName = getenv("DISPLAY");
     const char *accelMethod = NULL;
-    const char *output = NULL;
-    unsigned long parent = 0;
-    EphyrPrivatePtr priv = pScrn->driverPrivate;
-    Bool fullscreen = FALSE;
     Bool noAccel = FALSE;
+    xcb_pixmap_t cursor_pxm;
+    xcb_gcontext_t cursor_gc;
+    uint16_t red, green, blue;
+    uint32_t pixel;
+    int index;
+    xcb_screen_t *xscreen;
+    xcb_rectangle_t rect = { 0, 0, 1, 1 };
+    uint32_t attrs[2];
+    uint32_t attr_mask = 0;
+    char *tmpstr;
+    char *class_hint;
+    size_t class_len;
 
     xf86DrvMsg(pScrn->scrnIndex, X_INFO, "ephyrPreInit\n");
 
@@ -1261,6 +1603,16 @@ ephyrPreInit(ScrnInfoPtr pScrn, int flags) {
     if (!ephyrAllocatePrivate(pScrn)) {
         xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "Failed to allocate private\n");
         return FALSE;
+    } else {
+        priv = pScrn->driverPrivate;
+        priv->output = NULL;
+        priv->use_fullscreen = FALSE;
+        priv->use_sw_cursor = TRUE;
+        priv->win_pre_existing = 0;
+        priv->win_explicit_position = FALSE;
+        priv->win_x = 0;
+        priv->win_y = 0;
+        priv->ximg = NULL;
     }
 
     if (!xf86SetDepthBpp(pScrn, 0, 0, 0, Support24bppFb | Support32bppFb)) {
@@ -1302,11 +1654,11 @@ ephyrPreInit(ScrnInfoPtr pScrn, int flags) {
     }
 
     if (xf86IsOptionSet(EphyrOptions, OPTION_RESNAME)) {
-        hostx_use_resname(xf86GetOptValString(EphyrOptions,
-                                              OPTION_RESNAME),
+        _ephyrUseResname(xf86GetOptValString(EphyrOptions,
+                                             OPTION_RESNAME),
                           TRUE);
     } else {
-        hostx_use_resname(xf86ServerName, FALSE);
+        _ephyrUseResname(xf86ServerName, FALSE);
     }
 
 #ifdef GLAMOR
@@ -1332,51 +1684,180 @@ ephyrPreInit(ScrnInfoPtr pScrn, int flags) {
     }
 #endif
 
-    if (xf86GetOptValULong(EphyrOptions,
-                           OPTION_PARENTWINDOW,
-                           &parent)) {
-        xf86DrvMsg(pScrn->scrnIndex, X_INFO, "Targeting parent window 0x%lx\n",
-                   parent);
+    if (xf86GetOptValInteger(EphyrOptions,
+                             OPTION_PARENTWINDOW,
+                             &priv->win_pre_existing)) {
+        xf86DrvMsg(pScrn->scrnIndex, X_INFO, "Targeting parent window 0x%x\n",
+                   priv->win_pre_existing);
     }
 
     if (xf86GetOptValBool(EphyrOptions,
                           OPTION_FULLSCREEN,
-                          &fullscreen)) {
-        if (fullscreen) {
-            hostx_use_fullscreen(pScrn);
-        }
+                          &priv->use_fullscreen)) {
 
         xf86DrvMsg(pScrn->scrnIndex, X_INFO, "Fullscreen mode %s\n",
-                   fullscreen ? "enabled" : "disabled");
+                   priv->use_fullscreen ? "enabled" : "disabled");
     }
 
     if (xf86IsOptionSet(EphyrOptions, OPTION_OUTPUT)) {
-        output = xf86GetOptValString(EphyrOptions,
-                                     OPTION_OUTPUT);
+        priv->output = xf86GetOptValString(EphyrOptions,
+                                           OPTION_OUTPUT);
         xf86DrvMsg(pScrn->scrnIndex, X_INFO,
                    "Targeting host X server output \"%s\"\n",
-                   output);
+                   priv->output);
+    }
+
+    if (xf86IsOptionSet(EphyrOptions, OPTION_ORIGIN)) {
+        if (sscanf(xf86GetOptValString(EphyrOptions, OPTION_ORIGIN),
+                   "%d %d", &priv->win_x, &priv->win_y) != 2) {
+            xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
+                       "Invalid value for option \"Origin\"\n");
+            return FALSE;
+        }
+
+        priv->win_explicit_position = TRUE;
+        xf86DrvMsg(pScrn->scrnIndex, X_INFO, "Using origin x:%d y:%d\n",
+                   priv->win_x, priv->win_y);
+    }
+
+    if (xf86GetOptValBool(EphyrOptions,
+                          OPTION_SWCURSOR,
+                          &priv->use_sw_cursor)) {
+        xf86DrvMsg(pScrn->scrnIndex, X_INFO, "Software cursor %s\n",
+                   priv->use_sw_cursor ? "enabled" : "disabled");
     }
 
     xf86ShowUnusedOptions(pScrn->scrnIndex, pScrn->options);
-    hostx_add_screen(pScrn, parent, pScrn->scrnIndex, FALSE, output);
 
-    if (hostx_get_xcbconn(pScrn) != NULL) {
-        xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-                   "Reusing current XCB connection to display %s\n",
-                   displayName);
-    } else if (!hostx_init(pScrn)) {
+/******************** hostx_init *********************/
+#ifdef GLAMOR
+    if (ephyr_glamor) {
+        priv->conn = ephyr_glamor_connect();
+    } else
+#endif
+    {
+        priv->conn = xcb_connect(NULL, &priv->screen);
+    }
+
+    if (!priv->conn || xcb_connection_has_error(priv->conn)) {
+        priv->conn = NULL;
         xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "Can't open display: %s\n",
                    displayName);
         return FALSE;
     }
 
-    if (!hostx_init_window(pScrn)) {
-        xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
-                   "Can't create window on display: %s\n",
-                   displayName);
-        return FALSE;
+    xscreen = xcb_aux_get_screen(priv->conn, priv->screen);
+    priv->winroot = xscreen->root;
+    priv->gc = xcb_generate_id(priv->conn);
+    priv->depth = xscreen->root_depth;
+
+#ifdef GLAMOR
+    if (ephyr_glamor) {
+        priv->visual = ephyr_glamor_get_visual();
+    } else
+#endif
+    {
+        priv->visual = xcb_aux_find_visual_by_id(xscreen, xscreen->root_visual);
     }
+
+    xcb_create_gc(priv->conn, priv->gc, priv->winroot, 0, NULL);
+    cookie_WINDOW_STATE = xcb_intern_atom(priv->conn, FALSE,
+                                          strlen("_NET_WM_STATE"),
+                                          "_NET_WM_STATE");
+    cookie_WINDOW_STATE_FULLSCREEN =
+        xcb_intern_atom(priv->conn, FALSE,
+                        strlen("_NET_WM_STATE_FULLSCREEN"),
+                        "_NET_WM_STATE_FULLSCREEN");
+
+    if (!xcb_aux_parse_color("red", &red, &green, &blue)) {
+        xcb_lookup_color_cookie_t c =
+            xcb_lookup_color(priv->conn, xscreen->default_colormap, 3, "red");
+        xcb_lookup_color_reply_t *reply =
+            xcb_lookup_color_reply(priv->conn, c, NULL);
+        red = reply->exact_red;
+        green = reply->exact_green;
+        blue = reply->exact_blue;
+        free(reply);
+    }
+
+    {
+        xcb_alloc_color_cookie_t c = xcb_alloc_color(priv->conn,
+                                                     xscreen->default_colormap,
+                                                     red, green, blue);
+        xcb_alloc_color_reply_t *r = xcb_alloc_color_reply(priv->conn, c, NULL);
+        red = r->red;
+        green = r->green;
+        blue = r->blue;
+        pixel = r->pixel;
+        free(r);
+    }
+
+    xcb_change_gc(priv->conn, priv->gc, XCB_GC_FOREGROUND, &pixel);
+
+    cursor_pxm = xcb_generate_id(priv->conn);
+    xcb_create_pixmap(priv->conn, 1, cursor_pxm, priv->winroot, 1, 1);
+    cursor_gc = xcb_generate_id(priv->conn);
+    pixel = 0;
+    xcb_create_gc(priv->conn, cursor_gc, cursor_pxm,
+                  XCB_GC_FOREGROUND, &pixel);
+    xcb_poly_fill_rectangle(priv->conn, cursor_pxm, cursor_gc, 1, &rect);
+    xcb_free_gc(priv->conn, cursor_gc);
+    priv->empty_cursor = xcb_generate_id(priv->conn);
+    xcb_create_cursor(priv->conn,
+                      priv->empty_cursor,
+                      cursor_pxm, cursor_pxm,
+                      0,0,0,
+                      0,0,0,
+                      1,1);
+    xcb_free_pixmap(priv->conn, cursor_pxm);
+
+    /* XXX: investigate this
+    if (!hostx_want_host_cursor ()) {
+        CursorVisible = TRUE;
+    }*/
+
+    /* Try to get share memory ximages for a little bit more speed */
+    if (!_ephyrCheckExtension(priv, &xcb_shm_id) || getenv("XEPHYR_NO_SHM")) {
+        fprintf(stderr, "\nNested Xorg unable to use SHM XImages\n");
+        priv->have_shm = FALSE;
+    } else {
+        /* Really really check we have shm - better way ?*/
+        xcb_shm_segment_info_t shminfo;
+        xcb_generic_error_t *e;
+        xcb_void_cookie_t cookie;
+        xcb_shm_seg_t shmseg;
+
+        priv->have_shm = TRUE;
+
+        shminfo.shmid = shmget(IPC_PRIVATE, 1, IPC_CREAT|0777);
+        shminfo.shmaddr = shmat(shminfo.shmid,0,0);
+
+        shmseg = xcb_generate_id(priv->conn);
+        cookie = xcb_shm_attach_checked(priv->conn, shmseg, shminfo.shmid,
+                                        TRUE);
+        e = xcb_request_check(priv->conn, cookie);
+
+        if (e) {
+            fprintf(stderr, "\nNested Xorg unable to use SHM XImages\n");
+            priv->have_shm = FALSE;
+            free(e);
+        }
+
+        shmdt(shminfo.shmaddr);
+        shmctl(shminfo.shmid, IPC_RMID, 0);
+    }
+
+    xcb_flush(priv->conn);
+
+    /* Setup the pause time between paints when debugging updates */
+
+    priv->damage_debug_msec = 20000;    /* 1/50 th of a second */
+
+    if (getenv("XEPHYR_PAUSE")) {
+        priv->damage_debug_msec = strtol(getenv("XEPHYR_PAUSE"), NULL, 0);
+        EPHYR_DBG("pause is %li\n", priv->damage_debug_msec);
+    }
+/******************** hostx_init *********************/
 
     /* TODO: replace with corresponding Xephyr function.
       if (!ephyrClientValidDepth(pScrn->depth)) {
@@ -1384,6 +1865,15 @@ ephyrPreInit(ScrnInfoPtr pScrn, int flags) {
             pScrn->depth);
       return FALSE;
       }*/
+
+    if (_ephyrGetOutputGeometry(priv)) {
+        if (!ephyrAddMode(pScrn, priv->win_width, priv->win_height)) {
+            xf86DrvMsg(pScrn->scrnIndex,
+                       X_WARNING,
+                       "Failed to get fullscreen dimensions for display %s. Skipping.\n",
+                       displayName);
+        }
+    }
 
     if (ephyrValidateModes(pScrn) < 1) {
         xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "No valid modes\n");
@@ -1393,6 +1883,14 @@ ephyrPreInit(ScrnInfoPtr pScrn, int flags) {
     if (!pScrn->modes) {
         xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "No valid modes found\n");
         return FALSE;
+    }
+
+    if (!priv->win_width) {
+        priv->win_width = pScrn->virtualX;
+    }
+
+    if (!priv->win_height) {
+        priv->win_height = pScrn->virtualY;
     }
 
     xf86SetCrtcForModes(pScrn, 0);
@@ -1412,12 +1910,124 @@ ephyrPreInit(ScrnInfoPtr pScrn, int flags) {
     pScrn->memPhysBase = 0;
     pScrn->fbOffset = 0;
 
+/********************* hostx_init_window *************/
+    attrs[0] = XCB_EVENT_MASK_BUTTON_PRESS
+             | XCB_EVENT_MASK_BUTTON_RELEASE
+             | XCB_EVENT_MASK_POINTER_MOTION
+             | XCB_EVENT_MASK_KEY_PRESS
+             | XCB_EVENT_MASK_KEY_RELEASE
+             | XCB_EVENT_MASK_EXPOSURE
+             | XCB_EVENT_MASK_STRUCTURE_NOTIFY;
+    attr_mask |= XCB_CW_EVENT_MASK;
+    xscreen = xcb_aux_get_screen(priv->conn, priv->screen);
+    priv->win = xcb_generate_id(priv->conn);
+    priv->server_depth = priv->depth;
+
+#ifdef GLAMOR
+    if (priv->visual->visual_id != xscreen->root_visual) {
+        attrs[1] = xcb_generate_id(priv->conn);
+        attr_mask |= XCB_CW_COLORMAP;
+        xcb_create_colormap(priv->conn,
+                            XCB_COLORMAP_ALLOC_NONE,
+                            attrs[1],
+                            priv->winroot,
+                            priv->visual->visual_id);
+    }
+#endif
+
+    if (priv->win_pre_existing != XCB_WINDOW_NONE) {
+        xcb_get_geometry_reply_t *prewin_geom;
+        xcb_get_geometry_cookie_t cookie;
+        xcb_generic_error_t *e = NULL;
+
+        /* Get screen size from existing window */
+        cookie = xcb_get_geometry(priv->conn,
+                                  priv->win_pre_existing);
+        prewin_geom = xcb_get_geometry_reply(priv->conn, cookie, &e);
+
+        if (e) {
+            free(e);
+            free(prewin_geom);
+            xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
+                       "Can't create window on display: %s\n",
+                       displayName);
+            return FALSE;
+        }
+
+        priv->win_width  = prewin_geom->width;
+        priv->win_height = prewin_geom->height;
+
+        free(prewin_geom);
+
+        xcb_create_window(priv->conn,
+                          XCB_COPY_FROM_PARENT,
+                          priv->win,
+                          priv->win_pre_existing,
+                          0, 0,
+                          priv->win_width,
+                          priv->win_height,
+                          0,
+                          XCB_WINDOW_CLASS_COPY_FROM_PARENT,
+                          priv->visual->visual_id,
+                          attr_mask,
+                          attrs);
+    } else {
+        xcb_create_window(priv->conn,
+                          XCB_COPY_FROM_PARENT,
+                          priv->win,
+                          priv->winroot,
+                          0, 0, /* Window placement will be set after mapping */
+                          priv->win_width,
+                          priv->win_height,
+                          0,
+                          XCB_WINDOW_CLASS_COPY_FROM_PARENT,
+                          priv->visual->visual_id,
+                          attr_mask,
+                          attrs);
+
+        _ephyrSetWinTitle(priv,
+                          "(ctrl+shift grabs mouse and keyboard)");
+
+        tmpstr = getenv("RESOURCE_NAME");
+
+        if (tmpstr && (!ephyrResNameFromConfig)) {
+            ephyrResName = tmpstr;
+        }
+
+        class_len = strlen(ephyrResName) + 1 + strlen("Xorg") + 1;
+        class_hint = malloc(class_len);
+
+        if (class_hint) {
+            strcpy(class_hint, ephyrResName);
+            strcpy(class_hint + strlen(ephyrResName) + 1, "Xorg");
+            xcb_change_property(priv->conn,
+                                XCB_PROP_MODE_REPLACE,
+                                priv->win,
+                                XCB_ATOM_WM_CLASS,
+                                XCB_ATOM_STRING,
+                                8,
+                                class_len,
+                                class_hint);
+            free(class_hint);
+        }
+    }
+
+    if (!priv->use_sw_cursor) {
+        /* Ditch the cursor, we provide our 'own' */
+        xcb_change_window_attributes(priv->conn,
+                                     priv->win,
+                                     XCB_CW_CURSOR,
+                                     &priv->empty_cursor);
+    }
+/********************* hostx_init_window *************/
+
     return TRUE;
 }
 
 static void
 ephyrShadowUpdate(ScreenPtr pScreen, shadowBufPtr pBuf) {
     ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
+    EphyrPrivatePtr priv = pScrn->driverPrivate;
 
     EPHYR_LOG("slow paint");
 
@@ -1426,7 +2036,7 @@ ephyrShadowUpdate(ScreenPtr pScreen, shadowBufPtr pBuf) {
      * pBuf->pDamage regions
      */
     //shadowUpdateRotatePacked(pScreen, pBuf);
-    hostx_paint_rect(pScrn, 0, 0, 0, 0, pScrn->virtualX, pScrn->virtualY);
+    _ephyrPaintRect(priv, 0, 0, 0, 0, pScrn->virtualX, pScrn->virtualY);
 }
 
 static Bool
@@ -1529,13 +2139,37 @@ ephyrCloseScreen(CLOSE_SCREEN_ARGS_DECL) {
                                  ephyrWakeupHandler,
                                  pScrn);
 #else
-    RemoveNotifyFd(hostx_get_fd());
+    RemoveNotifyFd(xcb_get_file_descriptor(priv->conn));
 #endif
 
-    hostx_close_screen(pScrn);
+    if (priv->have_shm) {
+        xcb_shm_detach(priv->conn, priv->shminfo.shmseg);
+        shmdt(priv->shminfo.shmaddr);
+        shmctl(priv->shminfo.shmid, IPC_RMID, 0);
+    } else {
+        free(priv->ximg->data);
+        priv->ximg->data = NULL;
+    }
+
+    xcb_image_destroy(priv->ximg);
+    priv->ximg = NULL;
+
     pScreen->CloseScreen = priv->CloseScreen;
     return (*pScreen->CloseScreen)(CLOSE_SCREEN_ARGS);
 }
+
+/**
+ * hostx_screen_init creates the XImage that will contain the front buffer of
+ * the ephyr screen, and possibly offscreen memory.
+ *
+ * @param width width of the screen
+ * @param height height of the screen
+ * @param buffer_height  height of the rectangle to be allocated.
+ *
+ * hostx_screen_init() creates an XImage, using MIT-SHM if it's available.
+ * buffer_height can be used to create a larger offscreen buffer, which is used
+ * by fakexa for storing offscreen pixmap data.
+ */
 
 /* Called at each server generation */
 static Bool
@@ -1543,17 +2177,135 @@ ephyrScreenInit(SCREEN_INIT_ARGS_DECL) {
     ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
     EphyrPrivatePtr priv = pScrn->driverPrivate;
     Pixel redMask, greenMask, blueMask;
-    char *fb_data;
+    Bool shm_success = FALSE;
+    char *fb_data = NULL;
+    unsigned int buffer_height = ephyrBufferHeight(pScrn);
 
     xf86DrvMsg(pScrn->scrnIndex, X_INFO, "ephyrScreenInit\n");
     ephyrPrintPscreen(pScrn);
 
-    fb_data = hostx_screen_init(pScrn,
-                                pScrn->frameX0, pScrn->frameY0,
-                                pScrn->virtualX, pScrn->virtualY,
-                                ephyrBufferHeight(pScrn),
-                                NULL, /* bytes per line/row (not used) */
-                                &pScrn->bitsPerPixel);
+/*********************** hostx_screen_init ***************************/
+    if (!ephyr_glamor && priv->have_shm) {
+        priv->ximg = xcb_image_create_native(priv->conn,
+                                             priv->win_width,
+                                             buffer_height,
+                                             XCB_IMAGE_FORMAT_Z_PIXMAP,
+                                             priv->depth,
+                                             NULL,
+                                             ~0,
+                                             NULL);
+
+        priv->shminfo.shmid =
+            shmget(IPC_PRIVATE,
+                   priv->ximg->stride * buffer_height,
+                   IPC_CREAT | 0777);
+        priv->ximg->data = shmat(priv->shminfo.shmid, 0, 0);
+        priv->shminfo.shmaddr = priv->ximg->data;
+
+        if (priv->ximg->data == (uint8_t *) -1) {
+            EPHYR_DBG
+                ("Can't attach SHM Segment, falling back to plain XImages");
+            priv->have_shm = FALSE;
+            xcb_image_destroy(priv->ximg);
+            shmctl(priv->shminfo.shmid, IPC_RMID, 0);
+        } else {
+            EPHYR_DBG("SHM segment attached %p", priv->shminfo.shmaddr);
+            priv->shminfo.shmseg = xcb_generate_id(priv->conn);
+            xcb_shm_attach(priv->conn,
+                           priv->shminfo.shmseg,
+                           priv->shminfo.shmid,
+                           FALSE);
+            shm_success = TRUE;
+        }
+    }
+
+    if (!ephyr_glamor && !shm_success) {
+        EPHYR_DBG("Creating image %dx%d for screen priv=%p\n",
+                  priv->win_width, buffer_height, priv);
+        priv->ximg = xcb_image_create_native(priv->conn,
+                                             priv->win_width,
+                                             buffer_height,
+                                             XCB_IMAGE_FORMAT_Z_PIXMAP,
+                                             priv->depth,
+                                             NULL,
+                                             ~0,
+                                             NULL);
+
+        /* Match server byte order so that the image can be converted to
+         * the native byte order by xcb_image_put() before drawing */
+        if (HOST_DEPTH_MATCHES_SERVER(priv)) {
+            priv->ximg->byte_order = IMAGE_BYTE_ORDER;
+        }
+
+        priv->ximg->data =
+            xallocarray(priv->ximg->stride, buffer_height);
+    }
+
+    if (priv->win_pre_existing == None && !EphyrWantResize) {
+        /* Ask the WM to keep our size static */
+        xcb_size_hints_t size_hints = {0};
+        size_hints.max_width = size_hints.min_width = priv->win_width;
+        size_hints.max_height = size_hints.min_height = priv->win_height;
+        size_hints.flags = (XCB_ICCCM_SIZE_HINT_P_MIN_SIZE |
+                            XCB_ICCCM_SIZE_HINT_P_MAX_SIZE);
+        xcb_icccm_set_wm_normal_hints(priv->conn, priv->win,
+                                      &size_hints);
+    }
+
+    xcb_map_window(priv->conn, priv->win);
+
+    /* Set explicit window position if it was informed in
+     * "Origin" option (or retrieved from "Output" option).
+     * Otherwise, accept the position set by WM.
+     * The trick here is putting this code after xcb_map_window() call,
+     * so these values won't be overriden by WM. */
+    if (priv->win_explicit_position) {
+        uint32_t mask = XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y;
+        uint32_t values[2] = {priv->win_x, priv->win_y};
+        xcb_configure_window(priv->conn, priv->win, mask, values);
+    }
+
+    xcb_aux_sync(priv->conn);
+
+    #ifdef GLAMOR
+    if (ephyr_glamor) {
+        /* *bytes_per_line = 0; */
+        pScrn->bitsPerPixel = 0;
+        ephyr_glamor_set_window_size(priv->glamor,
+                                     priv->win_width, priv->win_height);
+    } else
+    #endif
+    {
+        if (HOST_DEPTH_MATCHES_SERVER(priv)) {
+            /*
+            if (bytes_per_line != NULL) {
+                *bytes_per_line = priv->ximg->stride;
+            }
+            */
+
+            pScrn->bitsPerPixel = priv->ximg->bpp;
+
+            EPHYR_DBG("Host matches server");
+            fb_data = priv->ximg->data;
+        } else {
+            int bytes_per_pixel = priv->server_depth >> 3;
+            int stride = (priv->win_width * bytes_per_pixel + 0x3) & ~0x3;
+
+            /*
+            if (bytes_per_line != NULL) {
+                *bytes_per_line = stride;
+            }
+            */
+
+            pScrn->bitsPerPixel = priv->server_depth;
+
+            EPHYR_DBG("server bpp %i", bytes_per_pixel);
+            priv->fb_data = xallocarray(stride, buffer_height);
+            fb_data = priv->fb_data;
+        }
+    }
+/*********************** hostx_screen_init ***************************/
+
     miClearVisualTypes();
 
     if (!miSetVisualTypesAndMasks(pScrn->depth,
@@ -1569,7 +2321,7 @@ ephyrScreenInit(SCREEN_INIT_ARGS_DECL) {
 
     if (!fbScreenInit(pScreen,
                       fb_data,
-                      pScrn->virtualX, pScrn->virtualY, pScrn->xDpi,
+                      priv->win_width, priv->win_height, pScrn->xDpi,
                       pScrn->yDpi, pScrn->displayWidth, pScrn->bitsPerPixel)) {
         return FALSE;
     }
@@ -1602,7 +2354,8 @@ ephyrScreenInit(SCREEN_INIT_ARGS_DECL) {
                                    ephyrWakeupHandler,
                                    pScrn);
 #else
-    SetNotifyFd(hostx_get_fd(), ephyrXcbNotify, X_NOTIFY_READ, NULL);
+    SetNotifyFd(xcb_get_file_descriptor(priv->conn),
+                ephyrXcbNotify, X_NOTIFY_READ, NULL);
 #endif
 
     return TRUE;

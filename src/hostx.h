@@ -44,25 +44,11 @@
 int hostx_want_screen_geometry(ScrnInfoPtr pScrn,
                                unsigned int *width, unsigned int *height,
                                int *x, int *y);
-int hostx_want_host_cursor(ScrnInfoPtr pScrn);
-void hostx_use_sw_cursor(ScrnInfoPtr pScrn);
 xcb_cursor_t hostx_get_empty_cursor(ScrnInfoPtr pScrn);
-void hostx_get_output_geometry(ScrnInfoPtr pScrn,
-                               const char *output,
-                               int *x, int *y,
-                               unsigned int *width, unsigned int *height);
-
-void hostx_use_fullscreen(ScrnInfoPtr pScrn);
-int hostx_want_fullscreen(ScrnInfoPtr pScrn);
 int hostx_want_preexisting_window(ScrnInfoPtr pScrn);
 void hostx_use_preexisting_window(unsigned long win_id);
-void hostx_use_resname(const char *name, int fromconfig);
 void hostx_set_title(const char *name);
 void hostx_handle_signal(int signum);
-Bool hostx_init(ScrnInfoPtr pScrn);
-Bool hostx_init_window(ScrnInfoPtr pScrn);
-void hostx_add_screen(ScrnInfoPtr pScrn, unsigned long win_id,
-                      int screen_num, Bool use_geometry, const char *output);
 void hostx_set_display_name(ScrnInfoPtr pScrn, const char *name);
 void hostx_set_screen_number(ScrnInfoPtr pScrn, int number);
 void hostx_set_win_title(ScrnInfoPtr pScrn, const char *extra_text);
@@ -73,16 +59,6 @@ void hostx_get_visual_masks(ScrnInfoPtr pScrn,
                             CARD32 *rmsk, CARD32 *gmsk, CARD32 *bmsk);
 void hostx_set_cmap_entry(ScreenPtr pScreen, unsigned char idx,
                           unsigned char r, unsigned char g, unsigned char b);
-void hostx_close_screen(ScrnInfoPtr pScrn);
-void *hostx_screen_init(ScrnInfoPtr pScrn,
-                        int x, int y,
-                        int width, int height, int buffer_height,
-                        int *bytes_per_line, int *bits_per_pixel);
-void hostx_paint_rect(ScrnInfoPtr pScrn,
-                      int sx, int sy, int dx, int dy, int width, int height);
-xcb_connection_t *hostx_get_xcbconn(ScrnInfoPtr pScrn);
 int hostx_get_screen(ScrnInfoPtr pScrn);
-int hostx_has_extension(ScrnInfoPtr pScrn, xcb_extension_t *extension);
-int hostx_get_fd(ScrnInfoPtr pScrn);
 
 #endif /*_XLIBS_STUFF_H_*/
