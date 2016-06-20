@@ -1694,7 +1694,7 @@ ephyrPreInit(ScrnInfoPtr pScrn, int flags) {
     if (xf86GetOptValBool(EphyrOptions,
                           OPTION_FULLSCREEN,
                           &priv->use_fullscreen)) {
-
+        priv->win_explicit_position = TRUE;
         xf86DrvMsg(pScrn->scrnIndex, X_INFO, "Fullscreen mode %s\n",
                    priv->use_fullscreen ? "enabled" : "disabled");
     }
