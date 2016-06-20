@@ -63,7 +63,9 @@
 #include "ephyrlog.h"
 #include "ephyr.h"
 
-extern int HostXWantDamageDebug = 0;
+#define HOST_DEPTH_MATCHES_SERVER(_vars) ((_vars)->depth == (_vars)->server_depth)
+
+extern int HostXWantDamageDebug;
 
 extern Bool EphyrWantResize;
 
@@ -165,7 +167,7 @@ hostx_get_bpp(ScrnInfoPtr pScrn) {
         return 0;
     }
 
-    if (host_depth_matches_server(priv)) {
+    if (HOST_DEPTH_MATCHES_SERVER(priv)) {
         return priv->visual->bits_per_rgb_value;
     } else {
         return priv->server_depth; /*XXX correct ?*/
@@ -181,7 +183,7 @@ hostx_get_visual_masks(ScrnInfoPtr pScrn,
         return;
     }
 
-    if (host_depth_matches_server(priv)) {
+    if (HOST_DEPTH_MATCHES_SERVER(priv)) {
         *rmsk = priv->visual->red_mask;
         *gmsk = priv->visual->green_mask;
         *bmsk = priv->visual->blue_mask;

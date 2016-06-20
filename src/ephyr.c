@@ -77,7 +77,7 @@
 
 #define TIMER_CALLBACK_INTERVAL 20
 
-#define HOST_DEPTH_MATCHES_SERVER(_vars) (priv->depth == (_vars)->server_depth)
+#define HOST_DEPTH_MATCHES_SERVER(_vars) ((_vars)->depth == (_vars)->server_depth)
 
 /* End of driver.c includes
  ******************************************************
