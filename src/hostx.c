@@ -72,13 +72,6 @@ extern Bool EphyrWantResize;
 extern const char *ephyrTitle;
 Bool ephyr_glamor = FALSE;
 
-extern const char *ephyrResName;
-extern Bool ephyrResNameFromConfig;
-extern xcb_intern_atom_cookie_t cookie_WINDOW_STATE,
-                                cookie_WINDOW_STATE_FULLSCREEN;
-
-static void hostx_set_fullscreen_hint(ScrnInfoPtr pScrn);
-
 int
 hostx_want_screen_geometry(ScrnInfoPtr pScrn,
                            unsigned int *width, unsigned int *height,
