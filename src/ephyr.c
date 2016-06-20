@@ -1859,6 +1859,57 @@ ephyrPreInit(ScrnInfoPtr pScrn, int flags) {
     }
 /******************** hostx_init *********************/
 
+    /* TODO: replace with corresponding Xephyr function.
+      if (!ephyrClientValidDepth(pScrn->depth)) {
+      xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "Invalid depth: %d\n",
+            pScrn->depth);
+      return FALSE;
+      }*/
+
+    if (_ephyrGetOutputGeometry(priv)) {
+        if (!ephyrAddMode(pScrn, priv->win_width, priv->win_height)) {
+            xf86DrvMsg(pScrn->scrnIndex,
+                       X_WARNING,
+                       "Failed to get fullscreen dimensions for display %s. Skipping.\n",
+                       displayName);
+        }
+    }
+
+    if (ephyrValidateModes(pScrn) < 1) {
+        xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "No valid modes\n");
+        return FALSE;
+    }
+
+    if (!pScrn->modes) {
+        xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "No valid modes found\n");
+        return FALSE;
+    }
+
+    if (!priv->win_width) {
+        priv->win_width = pScrn->virtualX;
+    }
+
+    if (!priv->win_height) {
+        priv->win_height = pScrn->virtualY;
+    }
+
+    xf86SetCrtcForModes(pScrn, 0);
+
+    pScrn->currentMode = pScrn->modes;
+
+    xf86SetDpi(pScrn, 0, 0);
+
+    if (!xf86LoadSubModule(pScrn, "shadow")) {
+        return FALSE;
+    }
+
+    if (!xf86LoadSubModule(pScrn, "fb")) {
+        return FALSE;
+    }
+
+    pScrn->memPhysBase = 0;
+    pScrn->fbOffset = 0;
+
 /********************* hostx_init_window *************/
     attrs[0] = XCB_EVENT_MASK_BUTTON_PRESS
              | XCB_EVENT_MASK_BUTTON_RELEASE
@@ -1912,7 +1963,7 @@ ephyrPreInit(ScrnInfoPtr pScrn, int flags) {
                           XCB_COPY_FROM_PARENT,
                           priv->win,
                           priv->win_pre_existing,
-                          0,0,
+                          0, 0,
                           priv->win_width,
                           priv->win_height,
                           0,
@@ -1925,7 +1976,9 @@ ephyrPreInit(ScrnInfoPtr pScrn, int flags) {
                           XCB_COPY_FROM_PARENT,
                           priv->win,
                           priv->winroot,
-                          0,0,100,100, /* will resize */
+                          0, 0, /* Window placement will be set after mapping */
+                          priv->win_width,
+                          priv->win_height,
                           0,
                           XCB_WINDOW_CLASS_COPY_FROM_PARENT,
                           priv->visual->visual_id,
@@ -1967,50 +2020,6 @@ ephyrPreInit(ScrnInfoPtr pScrn, int flags) {
                                      &priv->empty_cursor);
     }
 /********************* hostx_init_window *************/
-
-
-    /* TODO: replace with corresponding Xephyr function.
-      if (!ephyrClientValidDepth(pScrn->depth)) {
-      xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "Invalid depth: %d\n",
-            pScrn->depth);
-      return FALSE;
-      }*/
-
-    if (_ephyrGetOutputGeometry(priv)) {
-        if (!ephyrAddMode(pScrn, priv->win_width, priv->win_height)) {
-            xf86DrvMsg(pScrn->scrnIndex,
-                       X_WARNING,
-                       "Failed to get fullscreen dimensions for display %s. Skipping.\n",
-                       displayName);
-        }
-    }
-
-    if (ephyrValidateModes(pScrn) < 1) {
-        xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "No valid modes\n");
-        return FALSE;
-    }
-
-    if (!pScrn->modes) {
-        xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "No valid modes found\n");
-        return FALSE;
-    }
-
-    xf86SetCrtcForModes(pScrn, 0);
-
-    pScrn->currentMode = pScrn->modes;
-
-    xf86SetDpi(pScrn, 0, 0);
-
-    if (!xf86LoadSubModule(pScrn, "shadow")) {
-        return FALSE;
-    }
-
-    if (!xf86LoadSubModule(pScrn, "fb")) {
-        return FALSE;
-    }
-
-    pScrn->memPhysBase = 0;
-    pScrn->fbOffset = 0;
 
     return TRUE;
 }
@@ -2170,10 +2179,7 @@ ephyrScreenInit(SCREEN_INIT_ARGS_DECL) {
     Pixel redMask, greenMask, blueMask;
     Bool shm_success = FALSE;
     char *fb_data = NULL;
-    int x = priv->win_x, y = priv->win_y;
-    unsigned int width = pScrn->virtualX,
-                 height = pScrn->virtualY,
-                 buffer_height = ephyrBufferHeight(pScrn);
+    unsigned int buffer_height = ephyrBufferHeight(pScrn);
 
     xf86DrvMsg(pScrn->scrnIndex, X_INFO, "ephyrScreenInit\n");
     ephyrPrintPscreen(pScrn);
@@ -2181,7 +2187,7 @@ ephyrScreenInit(SCREEN_INIT_ARGS_DECL) {
 /*********************** hostx_screen_init ***************************/
     if (!ephyr_glamor && priv->have_shm) {
         priv->ximg = xcb_image_create_native(priv->conn,
-                                             width,
+                                             priv->win_width,
                                              buffer_height,
                                              XCB_IMAGE_FORMAT_Z_PIXMAP,
                                              priv->depth,
@@ -2215,9 +2221,9 @@ ephyrScreenInit(SCREEN_INIT_ARGS_DECL) {
 
     if (!ephyr_glamor && !shm_success) {
         EPHYR_DBG("Creating image %dx%d for screen priv=%p\n",
-                  width, buffer_height, priv);
+                  priv->win_width, buffer_height, priv);
         priv->ximg = xcb_image_create_native(priv->conn,
-                                             width,
+                                             priv->win_width,
                                              buffer_height,
                                              XCB_IMAGE_FORMAT_Z_PIXMAP,
                                              priv->depth,
@@ -2235,17 +2241,11 @@ ephyrScreenInit(SCREEN_INIT_ARGS_DECL) {
             xallocarray(priv->ximg->stride, buffer_height);
     }
 
-    {
-        uint32_t mask = XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT;
-        uint32_t values[2] = {width, height};
-        xcb_configure_window(priv->conn, priv->win, mask, values);
-    }
-
     if (priv->win_pre_existing == None && !EphyrWantResize) {
         /* Ask the WM to keep our size static */
         xcb_size_hints_t size_hints = {0};
-        size_hints.max_width = size_hints.min_width = width;
-        size_hints.max_height = size_hints.min_height = height;
+        size_hints.max_width = size_hints.min_width = priv->win_width;
+        size_hints.max_height = size_hints.min_height = priv->win_height;
         size_hints.flags = (XCB_ICCCM_SIZE_HINT_P_MIN_SIZE |
                             XCB_ICCCM_SIZE_HINT_P_MAX_SIZE);
         xcb_icccm_set_wm_normal_hints(priv->conn, priv->win,
@@ -2255,13 +2255,13 @@ ephyrScreenInit(SCREEN_INIT_ARGS_DECL) {
     xcb_map_window(priv->conn, priv->win);
 
     /* Set explicit window position if it was informed in
-     * -screen option (WxH+X or WxH+X+Y). Otherwise, accept the
-     * position set by WM.
+     * "Origin" option (or retrieved from "Output" option).
+     * Otherwise, accept the position set by WM.
      * The trick here is putting this code after xcb_map_window() call,
      * so these values won't be overriden by WM. */
     if (priv->win_explicit_position) {
         uint32_t mask = XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y;
-        uint32_t values[2] = {x, y};
+        uint32_t values[2] = {priv->win_x, priv->win_y};
         xcb_configure_window(priv->conn, priv->win, mask, values);
     }
 
@@ -2289,7 +2289,7 @@ ephyrScreenInit(SCREEN_INIT_ARGS_DECL) {
             fb_data = priv->ximg->data;
         } else {
             int bytes_per_pixel = priv->server_depth >> 3;
-            int stride = (width * bytes_per_pixel + 0x3) & ~0x3;
+            int stride = (priv->win_width * bytes_per_pixel + 0x3) & ~0x3;
 
             /*
             if (bytes_per_line != NULL) {
@@ -2321,7 +2321,7 @@ ephyrScreenInit(SCREEN_INIT_ARGS_DECL) {
 
     if (!fbScreenInit(pScreen,
                       fb_data,
-                      width, height, pScrn->xDpi,
+                      priv->win_width, priv->win_height, pScrn->xDpi,
                       pScrn->yDpi, pScrn->displayWidth, pScrn->bitsPerPixel)) {
         return FALSE;
     }
