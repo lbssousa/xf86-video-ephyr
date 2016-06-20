@@ -89,8 +89,8 @@ Bool ephyrNoXV = FALSE;
 
 static int mouseState = 0;
 static Rotation ephyrRandr = RR_Rotate_0;
-static int HostXWantDamageDebug = 0;
 
+int HostXWantDamageDebug = 0;
 Bool EphyrWantGrayScale = 0;
 Bool EphyrWantResize = 0;
 Bool EphyrWantNoHostGrab = 0;
@@ -925,7 +925,7 @@ miPointerScreenFuncRec ephyrPointerScreenFuncs = {
 };
 
 
-static ScrnInfoPtr
+static ScreenPtr
 screen_from_window(Window w) {
     int i = 0;
 
@@ -937,7 +937,7 @@ screen_from_window(Window w) {
         if (priv->win == w
             || priv->peer_win == w
             || priv->win_pre_existing == w) {
-            return pScrn;
+            return pScreen;
         }
     }
 
@@ -962,7 +962,8 @@ ephyrProcessErrorEvent(xcb_generic_event_t *xev) {
 static void
 ephyrProcessExpose(xcb_generic_event_t *xev) {
     xcb_expose_event_t *expose = (xcb_expose_event_t *) xev;
-    ScrnInfoPtr pScrn = screen_from_window(expose->window);
+    ScreenPtr pScreen = screen_from_window(expose->window);
+    ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
     EphyrPrivatePtr priv = pScrn->driverPrivate;
 
     /* Wait for the last expose event in a series of cliprects
@@ -985,7 +986,8 @@ static void
 ephyrProcessConfigureNotify(xcb_generic_event_t *xev) {
     xcb_configure_notify_event_t *configure =
         (xcb_configure_notify_event_t *) xev;
-    ScrnInfoPtr pScrn = screen_from_window(configure->window);
+    ScreenPtr pScreen = screen_from_window(configure->window);
+    ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
     EphyrPrivatePtr priv = pScrn->driverPrivate;
 
     if (!priv ||
