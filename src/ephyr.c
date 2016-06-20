@@ -1162,6 +1162,7 @@ typedef enum {
     OPTION_PARENTWINDOW,
     OPTION_FULLSCREEN,
     OPTION_OUTPUT,
+    OPTION_ORIGIN,
     OPTION_SWCURSOR
 } ephyrOpts;
 
@@ -1185,6 +1186,7 @@ static OptionInfoRec EphyrOptions[] = {
     { OPTION_PARENTWINDOW, "ParentWindow", OPTV_INTEGER, {0}, FALSE },
     { OPTION_FULLSCREEN,   "Fullscreen",   OPTV_BOOLEAN, {0}, FALSE },
     { OPTION_OUTPUT,       "Output",       OPTV_STRING,  {0}, FALSE },
+    { OPTION_ORIGIN,       "Origin",       OPTV_STRING,  {0}, FALSE },
     { OPTION_SWCURSOR,     "SWCursor",     OPTV_BOOLEAN, {0}, FALSE },
     { -1,                  NULL,           OPTV_NONE,    {0}, FALSE }
 };
@@ -1608,6 +1610,9 @@ ephyrPreInit(ScrnInfoPtr pScrn, int flags) {
         priv->use_sw_cursor = TRUE;
         priv->win_pre_existing = 0;
         priv->win_explicit_position = FALSE;
+        priv->win_x = 0;
+        priv->win_y = 0;
+        priv->ximg = NULL;
     }
 
     if (!xf86SetDepthBpp(pScrn, 0, 0, 0, Support24bppFb | Support32bppFb)) {
@@ -1702,6 +1707,19 @@ ephyrPreInit(ScrnInfoPtr pScrn, int flags) {
                    priv->output);
     }
 
+    if (xf86IsOptionSet(EphyrOptions, OPTION_ORIGIN)) {
+        if (sscanf(xf86GetOptValString(EphyrOptions, OPTION_ORIGIN),
+                   "%d %d", &priv->win_x, &priv->win_y) != 2) {
+            xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
+                       "Invalid value for option \"Origin\"\n");
+            return FALSE;
+        }
+
+        priv->win_explicit_position = TRUE;
+        xf86DrvMsg(pScrn->scrnIndex, X_INFO, "Using origin x:%d y:%d\n",
+                   priv->win_x, priv->win_y);
+    }
+
     if (xf86GetOptValBool(EphyrOptions,
                           OPTION_SWCURSOR,
                           &priv->use_sw_cursor)) {
@@ -1710,10 +1728,6 @@ ephyrPreInit(ScrnInfoPtr pScrn, int flags) {
     }
 
     xf86ShowUnusedOptions(pScrn->scrnIndex, pScrn->options);
-
-    if (pScrn->frameX0 * pScrn->frameY0 != 0) {
-        priv->win_explicit_position = TRUE;
-    }
 
 /******************** hostx_init *********************/
 #ifdef GLAMOR
@@ -1857,9 +1871,6 @@ ephyrPreInit(ScrnInfoPtr pScrn, int flags) {
     xscreen = xcb_aux_get_screen(priv->conn, priv->screen);
     priv->win = xcb_generate_id(priv->conn);
     priv->server_depth = priv->depth;
-    priv->ximg = NULL;
-    priv->win_x = 0;
-    priv->win_y = 0;
 
 #ifdef GLAMOR
     if (priv->visual->visual_id != xscreen->root_visual) {
@@ -2159,7 +2170,7 @@ ephyrScreenInit(SCREEN_INIT_ARGS_DECL) {
     Pixel redMask, greenMask, blueMask;
     Bool shm_success = FALSE;
     char *fb_data = NULL;
-    int x = pScrn->frameX0, y = pScrn->frameY0;
+    int x = priv->win_x, y = priv->win_y;
     unsigned int width = pScrn->virtualX,
                  height = pScrn->virtualY,
                  buffer_height = ephyrBufferHeight(pScrn);
@@ -2255,11 +2266,6 @@ ephyrScreenInit(SCREEN_INIT_ARGS_DECL) {
     }
 
     xcb_aux_sync(priv->conn);
-
-    priv->win_width = width;
-    priv->win_height = height;
-    priv->win_x = x;
-    priv->win_y = y;
 
     #ifdef GLAMOR
     if (ephyr_glamor) {
