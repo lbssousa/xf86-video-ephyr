@@ -99,9 +99,6 @@ const char *ephyrTitle = NULL;
 const char *ephyrResName = NULL;
 Bool ephyrResNameFromConfig = FALSE;
 
-static xcb_intern_atom_cookie_t cookie_WINDOW_STATE,
-                                cookie_WINDOW_STATE_FULLSCREEN;
-
 #if 0
 Bool
 ephyrInitialize(KdCardInfo * card, EphyrPriv * priv) {
@@ -1403,9 +1400,17 @@ _ephyrUseResname(const char *name, Bool fromconfig) {
 static void
 _ephyrSetFullscreenHint(EphyrPrivatePtr priv) {
     xcb_atom_t atom_WINDOW_STATE, atom_WINDOW_STATE_FULLSCREEN;
-    int index;
+    xcb_intern_atom_cookie_t cookie_WINDOW_STATE,
+                             cookie_WINDOW_STATE_FULLSCREEN;
     xcb_intern_atom_reply_t *reply;
 
+    cookie_WINDOW_STATE = xcb_intern_atom(priv->conn, FALSE,
+                                          strlen("_NET_WM_STATE"),
+                                          "_NET_WM_STATE");
+    cookie_WINDOW_STATE_FULLSCREEN =
+        xcb_intern_atom(priv->conn, FALSE,
+                        strlen("_NET_WM_STATE_FULLSCREEN"),
+                        "_NET_WM_STATE_FULLSCREEN");
     reply = xcb_intern_atom_reply(priv->conn, cookie_WINDOW_STATE, NULL);
     atom_WINDOW_STATE = reply->atom;
     free(reply);
@@ -1416,7 +1421,7 @@ _ephyrSetFullscreenHint(EphyrPrivatePtr priv) {
     free(reply);
 
     xcb_change_property(priv->conn,
-                        PropModeReplace,
+                        XCB_PROP_MODE_REPLACE,
                         priv->win,
                         atom_WINDOW_STATE,
                         XCB_ATOM_ATOM,
@@ -1468,7 +1473,13 @@ static Bool
 _ephyrGetOutputGeometry(EphyrPrivatePtr priv) {
     Bool output_found = FALSE;
 
-    if (priv->output != NULL) {
+    if (priv->use_fullscreen) {
+        xcb_screen_t *xscreen = xcb_aux_get_screen(priv->conn, priv->screen);
+        priv->win_width = xscreen->width_in_pixels;
+        priv->win_height = xscreen->height_in_pixels;
+        priv->win_explicit_position = TRUE;
+        output_found = TRUE;
+    } else if (priv->output != NULL) {
         int i, name_len = 0;
         char *name = NULL;
         xcb_generic_error_t *error;
@@ -1552,6 +1563,7 @@ _ephyrGetOutputGeometry(EphyrPrivatePtr priv) {
                 priv->win_height = crtc_info_r->height;
 
                 priv->win_explicit_position = TRUE;
+                priv->use_fullscreen = TRUE;
                 free(crtc_info_r);
             }
 
@@ -1560,15 +1572,6 @@ _ephyrGetOutputGeometry(EphyrPrivatePtr priv) {
         }
 
         free(screen_resources_r);
-    } else if (priv->use_fullscreen) {
-        xcb_screen_t *xscreen = xcb_aux_get_screen(priv->conn, priv->screen);
-        priv->win_width = xscreen->width_in_pixels;
-        priv->win_height = xscreen->height_in_pixels;
-        output_found = TRUE;
-    }
-
-    if (output_found) {
-        _ephyrSetFullscreenHint(priv);
     }
 
     return output_found;
@@ -1694,7 +1697,6 @@ ephyrPreInit(ScrnInfoPtr pScrn, int flags) {
     if (xf86GetOptValBool(EphyrOptions,
                           OPTION_FULLSCREEN,
                           &priv->use_fullscreen)) {
-        priv->win_explicit_position = TRUE;
         xf86DrvMsg(pScrn->scrnIndex, X_INFO, "Fullscreen mode %s\n",
                    priv->use_fullscreen ? "enabled" : "disabled");
     }
@@ -1761,13 +1763,6 @@ ephyrPreInit(ScrnInfoPtr pScrn, int flags) {
     }
 
     xcb_create_gc(priv->conn, priv->gc, priv->winroot, 0, NULL);
-    cookie_WINDOW_STATE = xcb_intern_atom(priv->conn, FALSE,
-                                          strlen("_NET_WM_STATE"),
-                                          "_NET_WM_STATE");
-    cookie_WINDOW_STATE_FULLSCREEN =
-        xcb_intern_atom(priv->conn, FALSE,
-                        strlen("_NET_WM_STATE_FULLSCREEN"),
-                        "_NET_WM_STATE_FULLSCREEN");
 
     if (!xcb_aux_parse_color("red", &red, &green, &blue)) {
         xcb_lookup_color_cookie_t c =
@@ -2250,6 +2245,10 @@ ephyrScreenInit(SCREEN_INIT_ARGS_DECL) {
                             XCB_ICCCM_SIZE_HINT_P_MAX_SIZE);
         xcb_icccm_set_wm_normal_hints(priv->conn, priv->win,
                                       &size_hints);
+    }
+
+    if (priv->use_fullscreen) {
+        _ephyrSetFullscreenHint(priv);
     }
 
     xcb_map_window(priv->conn, priv->win);
